@@ -1,9 +1,11 @@
 export interface OnboardingQuestion {
   id: string;
-  type: 'text' | 'select' | 'number';
+  type: 'text' | 'select' | 'choice';
   question: string;
   placeholder?: string;
   options?: string[];
+  /** type 为 choice 时的点选项，value 为提交给服务端的数值。 */
+  choices?: Array<{ label: string; value: number }>;
   validation?: {
     required?: boolean;
     min?: number;
@@ -24,14 +26,14 @@ export const techSelfTaughtTrack: TrackConfig = {
   description: 'AI 辅助的技术学习规划，帮助你系统化地完成职业转型',
   onboardingQuestions: [
     {
-      id: 'current_background',
+      id: 'currentLevel',
       type: 'text',
       question: '你目前的技术基础如何？',
       placeholder: '例如：零基础 / 学过 HTML+CSS / 计算机专业但没做开发...',
       validation: { required: true },
     },
     {
-      id: 'target_role',
+      id: 'targetRole',
       type: 'select',
       question: '你的目标岗位是？',
       options: [
@@ -45,11 +47,16 @@ export const techSelfTaughtTrack: TrackConfig = {
       validation: { required: true },
     },
     {
-      id: 'weekly_hours',
-      type: 'number',
-      question: '每周能投入多少小时学习？',
-      placeholder: '10',
-      validation: { required: true, min: 1, max: 168 },
+      id: 'weeklyHours',
+      type: 'choice',
+      question: '每周投入几小时？',
+      choices: [
+        { label: '5 小时', value: 5 },
+        { label: '10 小时', value: 10 },
+        { label: '15 小时', value: 15 },
+        { label: '20 小时以上', value: 20 },
+      ],
+      validation: { required: true },
     },
     {
       id: 'deadline',
@@ -59,7 +66,7 @@ export const techSelfTaughtTrack: TrackConfig = {
       validation: { required: true },
     },
     {
-      id: 'biggest_challenge',
+      id: 'biggestBlocker',
       type: 'text',
       question: '你觉得最卡你的是什么？',
       placeholder: '例如：不知道从哪开始 / 坚持不下来 / 缺少实战项目...',
