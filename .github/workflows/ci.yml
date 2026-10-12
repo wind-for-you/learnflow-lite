@@ -152,68 +152,48 @@ jobs:
       
       - name: Worker 体积检查 - Wrangler dry-run
         run: |
-          OUTPUT=$(pnpm wrangler deploy --dry-run --outdir=.wrangler-output 2>&1 || true)
-          echo "$OUTPUT"
-          echo "$OUTPUT" > wrangler-dry-run.txt
-          
-          if [ ! -d ".open-next" ]; then
-            echo "❌ 构建产物不存在"
+          set -o pipefail
+          # 无需 Cloudflare 登录；dry-run 打包失败（如模块无法解析）直接让任务失败
+          if ! pnpm exec wrangler deploy --dry-run --outdir .wrangler-output 2>&1 | tee wrangler-dry-run.txt; then
+            echo "❌ wrangler dry-run 失败"
             exit 1
           fi
-          
-          TOTAL_UPLOAD=$(echo "$OUTPUT" | grep -oP "Total Upload: \K[\d\.]+ (KiB|MiB)" || echo "")
-          GZIP_SIZE=$(echo "$OUTPUT" | grep -oP "gzip: \K[\d\.]+ (KiB|MiB)" || echo "")
-          
-          if [ -z "$TOTAL_UPLOAD" ]; then
-            echo "⚠️ 无法从 wrangler 输出解析体积，使用文件大小检查"
-            WORKER_FILE=".open-next/server-functions/default/index.mjs"
-            if [ -f "$WORKER_FILE" ]; then
-              SIZE=$(stat -c%s "$WORKER_FILE" 2>/dev/null || stat -f%z "$WORKER_FILE")
-              SIZE_KB=$((SIZE / 1024))
-              THRESHOLD_KB=2150
-              echo "Worker 文件大小: ${SIZE_KB} KB"
-              echo "阈值 (70% of 3MB): ${THRESHOLD_KB} KB"
-              if [ $SIZE -gt $((THRESHOLD_KB * 1024)) ]; then
-                echo "❌ Worker 体积超过阈值"
-                exit 1
-              fi
-              echo "## Worker 体积检查" >> $GITHUB_STEP_SUMMARY
-              echo "- Worker 文件: ${SIZE_KB} KB" >> $GITHUB_STEP_SUMMARY
-              echo "- 阈值: ${THRESHOLD_KB} KB (70% of 3MB)" >> $GITHUB_STEP_SUMMARY
-              echo "- 状态: ✅ 通过" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "❌ Worker 文件不存在"
-              exit 1
-            fi
-          else
-            echo "## Worker 体积检查" >> $GITHUB_STEP_SUMMARY
-            echo "- Total Upload: $TOTAL_UPLOAD" >> $GITHUB_STEP_SUMMARY
-            echo "- Gzip: $GZIP_SIZE" >> $GITHUB_STEP_SUMMARY
-            
-            UPLOAD_NUM=$(echo "$TOTAL_UPLOAD" | grep -oP "[\d\.]+")
-            UPLOAD_UNIT=$(echo "$TOTAL_UPLOAD" | grep -oP "(KiB|MiB)")
-            
-            if [ "$UPLOAD_UNIT" = "MiB" ]; then
-              UPLOAD_KB=$(echo "$UPLOAD_NUM * 1024" | bc)
-            else
-              UPLOAD_KB=$UPLOAD_NUM
-            fi
-            
-            THRESHOLD_KB=2150
-            UPLOAD_KB_INT=${UPLOAD_KB%.*}
-            
-            echo "- 换算: ${UPLOAD_KB_INT} KB" >> $GITHUB_STEP_SUMMARY
-            echo "- 阈值: ${THRESHOLD_KB} KB (70% of 3MB)" >> $GITHUB_STEP_SUMMARY
-            
-            if [ $UPLOAD_KB_INT -gt $THRESHOLD_KB ]; then
-              echo "- 状态: ❌ 超过阈值" >> $GITHUB_STEP_SUMMARY
-              echo "❌ Worker 体积超过阈值"
-              exit 1
-            fi
-            echo "- 状态: ✅ 通过" >> $GITHUB_STEP_SUMMARY
+          if grep -q "ERROR" wrangler-dry-run.txt; then
+            echo "❌ wrangler dry-run 输出包含错误"
+            exit 1
           fi
-          
-          echo "✅ Worker 体积检查通过"
+
+          LINE=$(grep -oP "Total Upload: .*" wrangler-dry-run.txt | sed 's/\x1b\[[0-9;]*m//g' | head -1)
+          TOTAL=$(echo "$LINE" | grep -oP "Total Upload: \K[\d.]+ (KiB|MiB)")
+          GZIP=$(echo "$LINE" | grep -oP "gzip: \K[\d.]+ (KiB|MiB)")
+          if [ -z "$GZIP" ]; then
+            echo "❌ 无法从 wrangler 输出解析 gzip 体积: $LINE"
+            exit 1
+          fi
+
+          to_kib() {
+            local num unit
+            num=$(echo "$1" | grep -oP "[\d.]+")
+            unit=$(echo "$1" | grep -oP "(KiB|MiB)")
+            if [ "$unit" = "MiB" ]; then echo "$num * 1024" | bc; else echo "$num"; fi
+          }
+          GZIP_KIB=$(to_kib "$GZIP")
+          GZIP_INT=${GZIP_KIB%.*}
+          THRESHOLD_KIB=2150
+
+          {
+            echo "## Worker 体积检查"
+            echo "- Total Upload: $TOTAL"
+            echo "- Gzip: $GZIP (阈值 ${THRESHOLD_KIB} KiB ≈ 70% of 3 MiB)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$GZIP_INT" -gt "$THRESHOLD_KIB" ]; then
+            echo "- 状态: ❌ 超过阈值" >> "$GITHUB_STEP_SUMMARY"
+            echo "❌ Worker gzip 体积 ${GZIP} 超过 ${THRESHOLD_KIB} KiB"
+            exit 1
+          fi
+          echo "- 状态: ✅ 通过" >> "$GITHUB_STEP_SUMMARY"
+          echo "✅ Worker 体积检查通过: gzip ${GZIP}"
 
   e2e:
     name: E2E 测试
