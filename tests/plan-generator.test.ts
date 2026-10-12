@@ -1,0 +1,270 @@
+import { describe, it, expect } from 'vitest';
+import { PlanGenerator } from '../lib/server/llm/plan-generator';
+import { MockLLMClient, createMockWeekJSON, createInvalidWeekJSON } from './__mocks__/llm-client';
+import type { TrackConfig } from '../lib/server/types';
+
+const mockTrackConfig: TrackConfig = {
+  trackId: 'test-track',
+  name: 'Test Track',
+  description: 'Test track for testing',
+  prompt: 'Generate a test learning plan',
+  templatePlan: [
+    {
+      title: 'Template Week 1',
+      milestone: 'Template Milestone 1',
+      tasks: [
+        {
+          title: 'Template Task 1',
+          description: 'Template description',
+          deliverable: 'Build and deploy a template project',
+          acceptanceCriteria: ['Criterion 1', 'Criterion 2'],
+        },
+      ],
+    },
+    {
+      title: 'Template Week 2',
+      milestone: 'Template Milestone 2',
+      tasks: [
+        {
+          title: 'Template Task 2',
+          description: 'Template description',
+          deliverable: 'Build and deploy another template project',
+          acceptanceCriteria: ['Criterion 1', 'Criterion 2'],
+        },
+      ],
+    },
+    {
+      title: 'Template Week 3',
+      milestone: 'Template Milestone 3',
+      tasks: [
+        {
+          title: 'Template Task 3',
+          description: 'Template description',
+          deliverable: 'Build and deploy a third template project',
+          acceptanceCriteria: ['Criterion 1', 'Criterion 2'],
+        },
+      ],
+    },
+  ],
+};
+
+describe('PlanGenerator', () => {
+  it('should generate plan from AI response', async () => {
+    const mockClient = new MockLLMClient(false, [
+      createMockWeekJSON(0) + '\n',
+      createMockWeekJSON(1) + '\n',
+      createMockWeekJSON(2),
+    ]);
+
+    const generator = new PlanGenerator(mockClient as any);
+    const request = {
+      trackId: 'test-track',
+      answers: { level: 'beginner' },
+      deviceId: 'device-123',
+    };
+
+    const results = [];
+    for await (const line of generator.generatePlan(request, mockTrackConfig)) {
+      results.push(line);
+    }
+
+    // Should have 3 weeks + 1 done message
+    expect(results.length).toBe(4);
+    
+    // Check week lines
+    expect(results[0].type).toBe('week');
+    expect(results[0].index).toBe(0);
+    expect(results[0].source).toBe('ai');
+    
+    expect(results[1].type).toBe('week');
+    expect(results[1].index).toBe(1);
+    expect(results[1].source).toBe('ai');
+    
+    expect(results[2].type).toBe('week');
+    expect(results[2].index).toBe(2);
+    expect(results[2].source).toBe('ai');
+    
+    // Check done line
+    expect(results[3].type).toBe('done');
+    expect(results[3].fallbackWeeks).toEqual([]);
+  });
+
+  it('should use template fallback for invalid AI weeks', async () => {
+    const mockClient = new MockLLMClient(false, [
+      createMockWeekJSON(0) + '\n',
+      createInvalidWeekJSON(1) + '\n', // Invalid - will use template
+      createMockWeekJSON(2),
+    ]);
+
+    const generator = new PlanGenerator(mockClient as any);
+    const request = {
+      trackId: 'test-track',
+      answers: { level: 'beginner' },
+      deviceId: 'device-123',
+    };
+
+    const results = [];
+    for await (const line of generator.generatePlan(request, mockTrackConfig)) {
+      results.push(line);
+    }
+
+    // Should have 3 weeks + 1 done message
+    expect(results.length).toBe(4);
+    
+    // Week 0 from AI
+    expect(results[0].type).toBe('week');
+    expect(results[0].index).toBe(0);
+    expect(results[0].source).toBe('ai');
+    
+    // Week 2 from AI
+    expect(results[1].type).toBe('week');
+    expect(results[1].index).toBe(2);
+    expect(results[1].source).toBe('ai');
+    
+    // Week 1 from template (fallback)
+    expect(results[2].type).toBe('week');
+    expect(results[2].index).toBe(1);
+    expect(results[2].source).toBe('template');
+    expect(results[2].data.title).toBe('Template Week 2');
+    
+    // Check done line reports fallback
+    expect(results[3].type).toBe('done');
+    expect(results[3].fallbackWeeks).toEqual([1]);
+  });
+
+  it('should handle LLM error and use all template weeks', async () => {
+    const mockClient = new MockLLMClient(true); // Will throw error
+
+    const generator = new PlanGenerator(mockClient as any);
+    const request = {
+      trackId: 'test-track',
+      answers: { level: 'beginner' },
+      deviceId: 'device-123',
+    };
+
+    const results = [];
+    for await (const line of generator.generatePlan(request, mockTrackConfig)) {
+      results.push(line);
+    }
+
+    // Should have 3 template weeks + 1 error message
+    expect(results.length).toBe(4);
+    
+    // All weeks from template
+    expect(results[0].type).toBe('week');
+    expect(results[0].source).toBe('template');
+    
+    expect(results[1].type).toBe('week');
+    expect(results[1].source).toBe('template');
+    
+    expect(results[2].type).toBe('week');
+    expect(results[2].source).toBe('template');
+    
+    // Check error line
+    expect(results[3].type).toBe('error');
+    expect(results[3].message).toBeDefined();
+    expect(results[3].fallbackWeeks).toEqual([0, 1, 2]);
+  });
+
+  it('should generate only specified weeks', async () => {
+    const mockClient = new MockLLMClient(false, [
+      createMockWeekJSON(1) + '\n',
+      createMockWeekJSON(2),
+    ]);
+
+    const generator = new PlanGenerator(mockClient as any);
+    const request = {
+      trackId: 'test-track',
+      answers: { level: 'beginner' },
+      deviceId: 'device-123',
+      weeks: [1, 2], // Only regenerate weeks 1 and 2
+    };
+
+    const results = [];
+    for await (const line of generator.generatePlan(request, mockTrackConfig)) {
+      results.push(line);
+    }
+
+    // Should only have 2 weeks + 1 done message
+    expect(results.length).toBe(3);
+    
+    expect(results[0].type).toBe('week');
+    expect(results[0].index).toBe(1);
+    
+    expect(results[1].type).toBe('week');
+    expect(results[1].index).toBe(2);
+    
+    expect(results[2].type).toBe('done');
+  });
+
+  it('should handle partial stream with incomplete JSON', async () => {
+    const mockClient = new MockLLMClient(false, [
+      createMockWeekJSON(0) + '\n',
+      '{"index": 1, "title": "Week', // Incomplete JSON
+    ]);
+
+    const generator = new PlanGenerator(mockClient as any);
+    const request = {
+      trackId: 'test-track',
+      answers: { level: 'beginner' },
+      deviceId: 'device-123',
+    };
+
+    const results = [];
+    for await (const line of generator.generatePlan(request, mockTrackConfig)) {
+      results.push(line);
+    }
+
+    // Should have 1 valid week + 2 template fallbacks + 1 done
+    expect(results.length).toBe(4);
+    
+    // Week 0 from AI
+    expect(results[0].type).toBe('week');
+    expect(results[0].index).toBe(0);
+    expect(results[0].source).toBe('ai');
+    
+    // Weeks 1 and 2 from template
+    expect(results[1].type).toBe('week');
+    expect(results[1].source).toBe('template');
+    
+    expect(results[2].type).toBe('week');
+    expect(results[2].source).toBe('template');
+    
+    // Done with fallback weeks
+    expect(results[3].type).toBe('done');
+    expect(results[3].fallbackWeeks).toContain(1);
+    expect(results[3].fallbackWeeks).toContain(2);
+  });
+
+  it('should handle streaming chunks that split JSON across boundaries', async () => {
+    const weekJSON = createMockWeekJSON(0);
+    const midpoint = Math.floor(weekJSON.length / 2);
+    
+    const mockClient = new MockLLMClient(false, [
+      weekJSON.slice(0, midpoint),
+      weekJSON.slice(midpoint) + '\n',
+      createMockWeekJSON(1),
+    ]);
+
+    const generator = new PlanGenerator(mockClient as any);
+    const request = {
+      trackId: 'test-track',
+      answers: { level: 'beginner' },
+      deviceId: 'device-123',
+    };
+
+    const results = [];
+    for await (const line of generator.generatePlan(request, mockTrackConfig)) {
+      results.push(line);
+    }
+
+    // Should successfully parse both weeks even though first was split
+    const weekResults = results.filter(r => r.type === 'week');
+    expect(weekResults.length).toBeGreaterThan(0);
+    
+    // Week 0 should be parsed correctly
+    const week0 = weekResults.find(w => w.type === 'week' && w.index === 0);
+    expect(week0).toBeDefined();
+    expect(week0?.source).toBe('ai');
+  });
+});
