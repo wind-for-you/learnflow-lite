@@ -75,7 +75,7 @@ export class PlanGenerator {
                 failedWeeks.add(weekData.index);
               }
             }
-          } catch (_e) {
+          } catch {
             // Not valid JSON yet, might be incomplete
           }
         }
@@ -100,7 +100,7 @@ export class PlanGenerator {
               failedWeeks.add(weekData.index);
             }
           }
-        } catch (_e) {
+        } catch {
           // Ignore incomplete JSON at the end
         }
       }

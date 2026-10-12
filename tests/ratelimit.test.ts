@@ -6,34 +6,57 @@ import type { Env } from '../lib/server/types';
 class MockD1Database implements D1Database {
   private counters: Map<string, number> = new Map();
 
-  prepare(_query: string): D1PreparedStatement {
-    return {
-      bind: (...args: unknown[]): D1PreparedStatement => {
-        return {
-          first: async <T = unknown>() => {
-            const key = args[0] as string;
-            const date = args[1] as string;
-            const counterKey = `${key}:${date}`;
-            
-            // Simulate INSERT ... ON CONFLICT DO UPDATE
-            const currentCount = this.counters.get(counterKey) || 0;
-            const newCount = currentCount + 1;
-            this.counters.set(counterKey, newCount);
-            
-            return { count: newCount } as T;
-          },
-          run: async () => ({ success: true, meta: { changes: 1 } }),
-        } as D1PreparedStatement;
+  prepare(query: string): D1PreparedStatement {
+    const self = this;
+    let boundArgs: unknown[] = [];
+    
+    const stmt = {
+      bind(...args: unknown[]): D1PreparedStatement {
+        boundArgs = args;
+        return stmt;
       },
+      first: async <T = unknown>() => {
+        const key = boundArgs[0] as string;
+        const date = boundArgs[1] as string;
+        const counterKey = `${key}:${date}`;
+        
+        // SELECT query - just read
+        if (query.toUpperCase().includes('SELECT')) {
+          const count = self.counters.get(counterKey) || 0;
+          return (count > 0 ? { count } : null) as T;
+        }
+        
+        // INSERT query - increment
+        const currentCount = self.counters.get(counterKey) || 0;
+        const newCount = currentCount + 1;
+        self.counters.set(counterKey, newCount);
+        
+        return { count: newCount } as T;
+      },
+      run: async () => ({ success: true, meta: { changes: 1 } }),
     } as D1PreparedStatement;
+    
+    return stmt;
   }
 
   dump(): Promise<ArrayBuffer> {
     throw new Error('Not implemented');
   }
 
-  batch<T = unknown>(_statements: D1PreparedStatement[]): Promise<D1Result<T>[]> {
-    throw new Error('Not implemented');
+  async batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]> {
+    // Simulate atomic batch execution by calling first() on each statement
+    const results = await Promise.all(
+      statements.map(async stmt => {
+        const result = await stmt.first<{ count: number }>();
+        return {
+          success: true,
+          results: [result],
+          meta: { changes: 1 }
+        } as D1Result<T>;
+      })
+    );
+    
+    return results;
   }
 
   exec(_query: string): Promise<D1ExecResult> {
@@ -101,6 +124,7 @@ describe('checkRateLimit', () => {
     await checkRateLimit(mockDb, 'device-123', '192.168.1.1', mockEnv);
 
     // Fourth request should be blocked
+    // Counter is incremented atomically, then checked
     const result = await checkRateLimit(mockDb, 'device-123', '192.168.1.1', mockEnv);
     expect(result.allowed).toBe(false);
     expect(result.remaining).toBe(0);

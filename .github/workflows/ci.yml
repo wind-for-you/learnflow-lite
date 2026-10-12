@@ -106,6 +106,9 @@ jobs:
         run: pnpm install --frozen-lockfile
       
       - name: Next.js 构建
+        env:
+          LLM_API_KEY: SENTINEL_LLM_KEY_CI_TEST
+          LLM_BASE_URL: https://sentinel-base.test
         run: pnpm build
       
       - name: 检查 Worker 体积
@@ -127,10 +130,24 @@ jobs:
       
       - name: 检查是否泄露密钥
         run: |
-          if grep -r "AMPLITUDE_API_KEY" .worker-next/ .open-next/ 2>/dev/null | grep -v "process.env"; then
-            echo "❌ 构建产物中发现密钥泄露"
+          # 检查构建产物目录是否存在
+          if [ ! -d ".open-next" ] && [ ! -d ".worker-next" ]; then
+            echo "❌ 错误: 构建产物目录不存在"
             exit 1
           fi
+          
+          # 检查 sentinel LLM_API_KEY
+          if grep -r "SENTINEL_LLM_KEY_CI_TEST" .worker-next/ .open-next/ 2>/dev/null | grep -v "process.env"; then
+            echo "❌ 构建产物中发现 LLM_API_KEY 泄露"
+            exit 1
+          fi
+          
+          # 检查其他密钥
+          if grep -r "AMPLITUDE_API_KEY" .worker-next/ .open-next/ 2>/dev/null | grep -v "process.env"; then
+            echo "❌ 构建产物中发现 AMPLITUDE_API_KEY 泄露"
+            exit 1
+          fi
+          
           echo "✅ 未发现密钥泄露"
       
       - name: Wrangler dry-run

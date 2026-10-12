@@ -85,7 +85,7 @@ export class LLMClient {
               if (content) {
                 yield content;
               }
-            } catch (_e) {
+            } catch {
               // Skip invalid JSON chunks
             }
           }
@@ -101,7 +101,7 @@ export class LLMClient {
           if (content) {
             yield content;
           }
-        } catch (_e) {
+        } catch {
           // Skip invalid JSON
         }
       }

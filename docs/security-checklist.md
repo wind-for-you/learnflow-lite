@@ -2,26 +2,67 @@
 
 ## 检查 Build 产物中无 Secrets
 
-### 命令
+### 命令(用于 CI)
 
 ```bash
-# 1. 构建项目并生成打包文件
-npm run build
+# 1. 设置 sentinel 值用于测试
+export LLM_API_KEY="SENTINEL_LLM_KEY_12345"
+export LLM_BASE_URL="https://sentinel-llm-base.example"
+export AMPLITUDE_API_KEY="SENTINEL_AMP_KEY_67890"
 
-# 2. 使用 grep 搜索可能的 secrets 模式
-grep -r "sk-[a-zA-Z0-9]\{32,\}" .next/ || echo "✅ No API keys found"
-grep -r "LLM_API_KEY" .next/ || echo "✅ No LLM_API_KEY references found"
-grep -r "dashscope.aliyuncs.com" .next/ | grep -v "example" || echo "✅ No hardcoded API URLs"
+# 2. 构建项目
+pnpm build
 
-# 3. 检查所有环境变量引用是否正确
-grep -r "process.env" .next/ | grep -E "API_KEY|SECRET|PASSWORD" | head -20
+# 3. 检查构建产物
+if [ ! -d ".open-next" ] && [ ! -d ".worker-next" ]; then
+  echo "❌ 错误: 构建产物目录不存在"
+  exit 1
+fi
+
+# 4. 搜索 sentinel 值
+if grep -r "SENTINEL_LLM_KEY_12345" .open-next/ .worker-next/ 2>/dev/null | grep -v "process.env"; then
+  echo "❌ 发现 LLM_API_KEY 泄露"
+  exit 1
+fi
+
+if grep -r "SENTINEL_AMP_KEY_67890" .open-next/ .worker-next/ 2>/dev/null | grep -v "process.env"; then
+  echo "❌ 发现 AMPLITUDE_API_KEY 泄露"
+  exit 1
+fi
+
+if grep -r "sentinel-llm-base.example" .open-next/ .worker-next/ 2>/dev/null | grep -v "process.env"; then
+  echo "❌ 发现 LLM_BASE_URL 泄露"
+  exit 1
+fi
+
+echo "✅ 未发现密钥泄露"
+```
+
+### CI 集成
+
+此检查已集成到 `.github/workflows/ci.yml` 的「构建检查」job:
+
+```yaml
+- name: 检查是否泄露密钥
+  run: |
+    # 设置 sentinel 值
+    export LLM_API_KEY="SENTINEL_LLM_KEY_TEST"
+    export LLM_BASE_URL="https://sentinel-base.test"
+    
+    # 构建(已在前一步完成)
+    # 搜索 sentinel
+    if grep -r "SENTINEL_LLM_KEY" .worker-next/ .open-next/ 2>/dev/null | grep -v "process.env"; then
+      echo "❌ 构建产物中发现 LLM 密钥泄露"
+      exit 1
+    fi
+    echo "✅ 未发现密钥泄露"
 ```
 
 ### 预期输出
 
-所有 grep 命令应该:
-- 返回退出码 1 (未找到)
-- 或只显示 "✅ No ... found" 消息
+- 构建产物目录必须存在
+- Sentinel 值不应出现在构建产物中(除了 `process.env` 引用)
+- 所有检查通过输出 "✅ 未发现密钥泄露"
 
 ### 已验证的安全实践
 
