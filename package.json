@@ -6,15 +6,16 @@
   "scripts": {
     "dev": "next dev",
     "build:next": "next build",
-    "build:worker": "npx @opennextjs/cloudflare build",
+    "build:worker": "opennextjs-cloudflare build --skipNextBuild",
     "build": "pnpm build:next && pnpm build:worker",
     "start": "next start",
-    "lint": "echo 'Lint temporarily disabled due to Next.js lint deprecation'",
-    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p e2e/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "deploy": "wrangler deploy",
-    "deploy:dry": "wrangler deploy --dry-run"
+    "deploy:dry": "wrangler deploy --dry-run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.3",
