@@ -107,14 +107,16 @@ jobs:
       
       - name: 哨兵密钥检查 - 构建
         run: |
-          export AMPLITUDE_API_KEY="SENTINEL_TEST_KEY_abc123_SHOULD_NOT_APPEAR_IN_BUILD"
+          export AMPLITUDE_API_KEY="SENTINEL_AMPLITUDE_abc123_SHOULD_NOT_APPEAR"
+          export LLM_API_KEY="SENTINEL_LLM_xyz789_SHOULD_NOT_APPEAR"
           pnpm build
         env:
           NEXT_PUBLIC_USE_MOCK: "true"
       
       - name: 哨兵密钥检查 - 验证
         run: |
-          SENTINEL="SENTINEL_TEST_KEY_abc123_SHOULD_NOT_APPEAR_IN_BUILD"
+          SENTINEL_AMPLITUDE="SENTINEL_AMPLITUDE_abc123_SHOULD_NOT_APPEAR"
+          SENTINEL_LLM="SENTINEL_LLM_xyz789_SHOULD_NOT_APPEAR"
           
           if [ ! -d ".open-next" ]; then
             echo "❌ .open-next 目录不存在，构建失败"
@@ -126,19 +128,33 @@ jobs:
             exit 1
           fi
           
-          echo "检查 .open-next 目录..."
-          if grep -r "$SENTINEL" .open-next/ 2>/dev/null; then
-            echo "❌ 在 .open-next 中发现哨兵密钥泄露"
+          LEAKED=0
+          
+          echo "检查 AMPLITUDE_API_KEY 泄露..."
+          if grep -r "$SENTINEL_AMPLITUDE" .open-next/ 2>/dev/null; then
+            echo "❌ 在 .open-next 中发现 AMPLITUDE_API_KEY 泄露"
+            LEAKED=1
+          fi
+          if grep -r "$SENTINEL_AMPLITUDE" .next/static/ 2>/dev/null; then
+            echo "❌ 在 .next/static 中发现 AMPLITUDE_API_KEY 泄露"
+            LEAKED=1
+          fi
+          
+          echo "检查 LLM_API_KEY 泄露..."
+          if grep -r "$SENTINEL_LLM" .open-next/ 2>/dev/null; then
+            echo "❌ 在 .open-next 中发现 LLM_API_KEY 泄露"
+            LEAKED=1
+          fi
+          if grep -r "$SENTINEL_LLM" .next/static/ 2>/dev/null; then
+            echo "❌ 在 .next/static 中发现 LLM_API_KEY 泄露"
+            LEAKED=1
+          fi
+          
+          if [ $LEAKED -eq 1 ]; then
             exit 1
           fi
           
-          echo "检查 .next/static 目录..."
-          if grep -r "$SENTINEL" .next/static/ 2>/dev/null; then
-            echo "❌ 在 .next/static 中发现哨兵密钥泄露"
-            exit 1
-          fi
-          
-          echo "✅ 未发现密钥泄露"
+          echo "✅ 未发现密钥泄露 (AMPLITUDE_API_KEY, LLM_API_KEY)"
       
       - name: Worker 体积检查 - Wrangler dry-run
         run: |
