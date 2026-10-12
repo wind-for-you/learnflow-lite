@@ -52,3 +52,14 @@ export type WeekLine = z.infer<typeof WeekLine>;
 export type DoneLine = z.infer<typeof DoneLine>;
 export type ErrorLine = z.infer<typeof ErrorLine>;
 export type NDJSONLine = z.infer<typeof NDJSONLine>;
+
+// 429 body for POST /api/plan
+export const RateLimitKind = z.enum(['device', 'ip']);
+export type RateLimitKind = z.infer<typeof RateLimitKind>;
+export const RateLimitError = z.object({
+  error: z.string(),
+  limit: RateLimitKind,
+  remaining: z.number().int().min(0),
+  resetAt: z.string().datetime(),
+});
+export type RateLimitError = z.infer<typeof RateLimitError>;

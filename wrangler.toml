@@ -12,3 +12,6 @@ database_id = "placeholder-will-be-set-in-production"
 
 [vars]
 NEXT_PUBLIC_USE_MOCK = "false"
+LLM_MODEL = "qwen-plus"
+RATE_LIMIT_PER_DEVICE_PER_DAY = "3"
+RATE_LIMIT_PER_IP_PER_DAY = "30"
