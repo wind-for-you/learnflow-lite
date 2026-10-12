@@ -150,6 +150,27 @@ jobs:
           
           echo "✅ 未发现密钥泄露 (AMPLITUDE_API_KEY, LLM_API_KEY)"
       
+      - name: 服务端产物不含 mermaid
+        run: |
+          if [ ! -d ".open-next/server-functions" ]; then
+            echo "❌ .open-next/server-functions 不存在"
+            exit 1
+          fi
+          # 只允许出现在元数据里：package.json 依赖声明、react-loadable 客户端 chunk 清单（handler.mjs 内联了该清单）
+          echo "mermaid 字面出现（含元数据）:"
+          grep -rl mermaid .open-next/server-functions || true
+          HITS=$(grep -rl mermaid .open-next/server-functions \
+            --exclude=package.json --exclude='*react-loadable-manifest*' --exclude=handler.mjs --exclude='*.map' || true)
+          # mermaidAPI 是 mermaid 运行时代码中必有的符号；在任何文件（含 handler.mjs）出现即说明代码被打进服务端
+          CODE=$(grep -rl mermaidAPI .open-next/server-functions || true)
+          if [ -n "$HITS$CODE" ]; then
+            echo "❌ mermaid 被打进服务端 bundle（应只在客户端动态加载）:"
+            echo "$HITS"
+            echo "$CODE"
+            exit 1
+          fi
+          echo "✅ .open-next/server-functions 中未发现 mermaid 代码（仅元数据引用）"
+
       - name: Worker 体积检查 - Wrangler dry-run
         run: |
           set -o pipefail
@@ -179,12 +200,12 @@ jobs:
           }
           GZIP_KIB=$(to_kib "$GZIP")
           GZIP_INT=${GZIP_KIB%.*}
-          THRESHOLD_KIB=2150
+          THRESHOLD_KIB=1300
 
           {
             echo "## Worker 体积检查"
             echo "- Total Upload: $TOTAL"
-            echo "- Gzip: $GZIP (阈值 ${THRESHOLD_KIB} KiB ≈ 70% of 3 MiB)"
+            echo "- Gzip: $GZIP (阈值 ${THRESHOLD_KIB} KiB)"
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$GZIP_INT" -gt "$THRESHOLD_KIB" ]; then
