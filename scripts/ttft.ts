@@ -24,17 +24,11 @@ const TEST_TRACK: TrackConfig = {
   prompt: 'Generate a simple 1-week learning plan for a beginner learning web development. Output only one JSON object representing the week.',
   templatePlan: [{
     title: 'Week 1: HTML Basics',
-    milestone: 'Create first webpage',
-    tasks: [{
-      title: 'Build a personal page',
-      description: 'Create an HTML page with your info',
-      deliverable: 'Build and deploy a personal webpage to GitHub Pages',
-      acceptanceCriteria: [
-        'Page contains name and bio',
-        'Deployed to GitHub Pages',
-        'Accessible via URL'
-      ]
-    }]
+    deliverable: 'Build and deploy a personal webpage to GitHub Pages',
+    doneCriteria: ['Page contains name and bio', 'Accessible via URL'],
+    submitFields: ['link'],
+    estimateHours: 4,
+    firstStep: { action: 'Create a GitHub repo', minutes: 10 },
   }]
 };
 

@@ -1,15 +1,10 @@
-# API 契约文档
+# API 契约文档 (plan schema v2)
+
+权威 schema 定义见 `lib/shared/plan.ts`(zod),`PLAN_SCHEMA_VERSION = 2`。
 
 ## 1. POST /api/plan - 生成学习计划
 
-生成或重新生成个性化学习计划的流式 API。
-
-### 请求
-
-**方法:** `POST`  
-**Content-Type:** `application/json`
-
-**请求体:**
+### 请求体
 
 ```json
 {
@@ -17,43 +12,26 @@
   "answers": {
     "currentLevel": "完全零基础",
     "targetRole": "前端工程师",
-    "hoursPerWeek": "15-20小时",
+    "weeklyHours": 10,
     "deadline": "6个月",
     "biggestBlocker": "不知道从哪里开始"
   },
   "deviceId": "unique-device-identifier",
   "weeks": [0, 1, 2],
-  "keptWeeks": [
-    { "index": 3, "title": "React 入门" }
-  ]
+  "keptWeeks": [{ "index": 3, "title": "React 入门" }]
 }
 ```
 
-**字段说明:**
+- `trackId` (必需): 已知轨道 ID
+- `answers` (必需): 字符串答案,每个最长 2000 字符;**必须包含 `weeklyHours: number`**,取值 `5 | 10 | 15 | 20`(`20` 表示 20+ 小时)
+- `deviceId` (必需): 最长 100 字符
+- **周数取决于 `weeklyHours`**:`10/15/20` → 12 周模板(每周 ≤ 10h);`5` → 23 周拆分模板(每周 ≤ 5h)。服务端按 weeklyHours 确定性选择模板,AI 生成的总周数与兜底模板周数一致;`weeks` 中超出该档位周数的索引会被忽略
+- `weeks` (可选): 需重新生成的周索引(非负整数)
+- `keptWeeks` (可选): 保留周 `{ index, title }`
 
-- `trackId` (必需): 学习轨道 ID,目前支持 `"tech-self-taught"`
-- `answers` (必需): 用户回答的问题对象,键值对形式
-- `deviceId` (必需): 设备唯一标识符,用于速率限制
-- `weeks` (可选): 要重新生成的周索引数组。不提供则生成完整计划
-- `keptWeeks` (可选): 保留的周信息,用于保持连贯性
+### 响应:`application/x-ndjson`,每行一个 JSON
 
-**验证规则:**
-
-- `trackId`: 必须是已知的轨道 ID
-- `answers`: 每个答案最大长度 2000 字符
-- `deviceId`: 最大长度 100 字符
-- `weeks`: 必须是非负整数数组
-
-### 响应
-
-**Content-Type:** `application/x-ndjson`  
-**状态码:** `200 OK`
-
-响应是流式 NDJSON 格式,每行一个 JSON 对象。
-
-#### NDJSON 行类型
-
-##### 1. Week 数据行
+#### week 行
 
 ```json
 {
@@ -61,73 +39,51 @@
   "index": 0,
   "source": "ai",
   "data": {
-    "title": "启程:第一个网页上线",
-    "milestone": "完成并部署第一个个人网页",
-    "tasks": [
-      {
-        "title": "30分钟做出第一个网页",
-        "description": "使用 HTML 和 CSS 创建一个简单的个人介绍页面",
-        "deliverable": "创建并部署一个包含个人简介的单页网站到 GitHub Pages",
-        "acceptanceCriteria": [
-          "页面包含个人照片或头像",
-          "有清晰的自我介绍",
-          "成功部署到 GitHub Pages"
-        ],
-        "estimatedHours": 4,
-        "references": [
-          {
-            "title": "HTML 基础教程",
-            "url": "https://developer.mozilla.org/zh-CN/docs/Learn/HTML",
-            "type": "doc"
-          }
-        ]
-      }
-    ],
-    "resources": [
-      {
-        "title": "MDN Web 文档",
-        "url": "https://developer.mozilla.org/zh-CN/"
-      }
-    ]
+    "title": "第一个网页上线",
+    "deliverable": "部署一个个人介绍单页到 GitHub Pages 并提交链接",
+    "doneCriteria": ["页面可公开访问", "包含自我介绍与联系方式"],
+    "submitFields": ["link"],
+    "estimateHours": 6,
+    "firstStep": { "action": "注册 GitHub 并新建仓库", "minutes": 15 },
+    "resources": [{ "title": "MDN HTML", "url": "https://developer.mozilla.org/zh-CN/docs/Learn/HTML" }]
   }
 }
 ```
 
-**字段说明:**
+`data` 为 `PlanWeekData`:
 
-- `type`: 固定为 `"week"`
-- `index`: 周索引,从 0 开始
-- `source`: `"ai"` 表示 AI 生成,`"template"` 表示使用模板兜底
-- `data.title`: 本周标题
-- `data.milestone`: 本周里程碑
-- `data.tasks`: 任务数组,至少包含一个具体的交付物任务
-- `data.resources`: 可选的学习资源数组
+| 字段 | 类型 | 约束 |
+|---|---|---|
+| `title` | string | 1–30 |
+| `deliverable` | string | 8–120,具体可检查的产出 |
+| `doneCriteria` | string[] | 1–3 条,每条 4–80 |
+| `submitFields` | (`text`\|`link`\|`number`)[] | ≥1 |
+| `estimateHours` | int | 1–40 |
+| `firstStep` | `{ action: string(4–60), minutes: int(5–30) }` | 可选(见服务端规则) |
+| `resources` | `{ title, url }[]` | 可选,≤3 |
 
-##### 2. 完成行
+v1 的 `milestone`、`tasks`、`acceptanceCriteria` 等字段**已移除**;`title`、`resources` 保留。
 
-```json
-{
-  "type": "done",
-  "fallbackWeeks": [5, 8]
-}
-```
+#### done 行
+`{ "type": "done", "fallbackWeeks": [5, 8] }`
 
-- `type`: 固定为 `"done"`
-- `fallbackWeeks`: 使用模板兜底的周索引数组
+#### error 行
+`{ "type": "error", "message": "LLM API error: 503", "fallbackWeeks": [2, 3] }`
 
-##### 3. 错误行
+`source: "template"` 表示该周校验失败,已用模板兜底。
 
-```json
-{
-  "type": "error",
-  "message": "LLM API error: 503",
-  "fallbackWeeks": [2, 3, 4]
-}
-```
+### 服务端校验规则(仅服务端执行,超出 zod schema)
 
-- `type`: 固定为 `"error"`
-- `message`: 错误描述
-- `fallbackWeeks`: 使用模板兜底的周索引数组
+- 第 1 周(`index = 0`)必须有 `firstStep`
+- `estimateHours <= answers.weeklyHours`
+- `vague_deliverable`:deliverable 仅包含"理解/了解/掌握/熟悉"之类词语、没有具体产出物
+
+### 拒绝原因 `WeekRejectReason`
+
+`missing_deliverable`, `missing_done_criteria`, `vague_deliverable`, `bad_estimate`, `over_budget`, `missing_first_step`, `json_parse`
+
+被拒绝时服务端记录结构化日志:
+`{"event":"week_rejected","weekIndex":0,"reason":"over_budget","model":"qwen-plus"}`
 
 ### 速率限制
 

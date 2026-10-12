@@ -1,6 +1,7 @@
 import type { PlanRequest, TrackConfig, NDJSONLine } from '../types';
 import { LLMClient } from './client';
-import { validateWeekData, toPlanWeek } from '../validation';
+import { validateWeekData } from '../validation';
+import { getTemplatePlan } from '../types';
 import type { WeekRejectReason } from '../../shared/plan';
 
 export class PlanGenerator {
@@ -22,10 +23,11 @@ export class PlanGenerator {
   ): AsyncGenerator<NDJSONLine, void, unknown> {
     const { answers, weeks, keptWeeks } = request;
     const weeklyHours = Number(answers.weeklyHours);
-    const totalWeeks = trackConfig.templatePlan.length;
+    const templatePlan = getTemplatePlan(trackConfig, weeklyHours);
+    const totalWeeks = templatePlan.length;
     
     // Determine which weeks to generate
-    const weeksToGenerate = weeks || Array.from({ length: totalWeeks }, (_, i) => i);
+    const weeksToGenerate = weeks ? weeks.filter(i => i < totalWeeks) : Array.from({ length: totalWeeks }, (_, i) => i);
     const generatedWeeks = new Set<number>();
 
     // Build the prompt
@@ -73,11 +75,11 @@ export class PlanGenerator {
       const missingWeeks = weeksToGenerate.filter(i => !generatedWeeks.has(i));
       
       for (const index of missingWeeks) {
-        if (index < trackConfig.templatePlan.length) {
+        if (index < totalWeeks) {
           yield {
             type: 'week',
             index,
-            data: toPlanWeek(trackConfig.templatePlan[index], { index, weeklyHours }),
+            data: templatePlan[index],
             source: 'template'
           };
         }
@@ -93,11 +95,11 @@ export class PlanGenerator {
       const missingWeeks = weeksToGenerate.filter(i => !generatedWeeks.has(i));
       
       for (const index of missingWeeks) {
-        if (index < trackConfig.templatePlan.length) {
+        if (index < totalWeeks) {
           yield {
             type: 'week',
             index,
-            data: toPlanWeek(trackConfig.templatePlan[index], { index, weeklyHours }),
+            data: templatePlan[index],
             source: 'template'
           };
         }

@@ -4,11 +4,12 @@ import {
   validateWaitlistRequest,
   validateWeekData,
   isVagueDeliverable,
-  toPlanWeek,
   ValidationError,
 } from '../lib/server/validation';
 import { PlanWeekData } from '../lib/shared/plan';
 import { techSelfTaughtTrack } from '../config/tracks/server/tech-self-taught';
+import { templatePlan5h, templatePlanStandard } from '../config/tracks/server/tech-self-taught-templates';
+import { getTemplatePlan } from '../lib/server/types';
 
 describe('validatePlanRequest', () => {
   it('should validate a correct plan request', () => {
@@ -254,15 +255,28 @@ describe('validateWeekData (schema v2)', () => {
   });
 });
 
-describe('toPlanWeek', () => {
-  it('converts every real template week into valid v2 data for every weeklyHours', () => {
-    for (const weeklyHours of [5, 10, 15, 20]) {
-      techSelfTaughtTrack.templatePlan.forEach((week, index) => {
-        const data = toPlanWeek(week, { index, weeklyHours });
-        expect(PlanWeekData.safeParse(data).success).toBe(true);
-        expect(data.estimateHours).toBeLessThanOrEqual(weeklyHours);
-        if (index === 0) expect(data.firstStep).toBeDefined();
-      });
-    }
+describe('v2 template plans by weeklyHours tier', () => {
+  it.each([5, 10, 15, 20])('weeklyHours=%i: every template week passes schema + server rules', (weeklyHours) => {
+    const plan = getTemplatePlan(techSelfTaughtTrack, weeklyHours);
+    expect(plan.length).toBe(weeklyHours === 5 ? templatePlan5h.length : 12);
+    plan.forEach((week, index) => {
+      expect(() => PlanWeekData.parse(week)).not.toThrow();
+      expect(validateWeekData(week, { index, weeklyHours })).toEqual({ ok: true, data: week });
+      expect(isVagueDeliverable(week.deliverable)).toBe(false);
+      expect(week.estimateHours).toBeLessThanOrEqual(weeklyHours);
+    });
+    expect(plan[0].firstStep).toBeDefined();
+  });
+
+  it('5h tier is a 20-24 week split with week-1 firstStep <= 15 min', () => {
+    expect(templatePlan5h.length).toBeGreaterThanOrEqual(20);
+    expect(templatePlan5h.length).toBeLessThanOrEqual(24);
+    expect(templatePlan5h[0].firstStep!.minutes).toBeLessThanOrEqual(15);
+    expect(new Set(templatePlan5h.map(w => w.deliverable)).size).toBe(templatePlan5h.length);
+  });
+
+  it('selection is deterministic', () => {
+    expect(getTemplatePlan(techSelfTaughtTrack, 5)).toBe(templatePlan5h);
+    for (const h of [10, 15, 20]) expect(getTemplatePlan(techSelfTaughtTrack, h)).toBe(templatePlanStandard);
   });
 });

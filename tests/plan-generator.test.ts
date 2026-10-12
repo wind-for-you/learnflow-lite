@@ -278,3 +278,20 @@ describe('PlanGenerator', () => {
     }
   });
 });
+
+describe('PlanGenerator tier week count', () => {
+  it('weeklyHours=5 uses the 5h split template length for fallback', async () => {
+    const { techSelfTaughtTrack } = await import('../config/tracks/server/tech-self-taught');
+    const { templatePlan5h } = await import('../config/tracks/server/tech-self-taught-templates');
+    const generator = new PlanGenerator(new MockLLMClient(true) as unknown as LLMClient);
+    const results: NDJSONLine[] = [];
+    for await (const line of generator.generatePlan(
+      { trackId: 'tech-self-taught', answers: { weeklyHours: 5 }, deviceId: 'd' },
+      techSelfTaughtTrack
+    )) results.push(line);
+    const weeks = results.filter(isWeekLine);
+    expect(weeks.length).toBe(templatePlan5h.length);
+    expect(weeks.every(w => w.data.estimateHours <= 5)).toBe(true);
+  });
+});
+

@@ -18,16 +18,9 @@ const createTestTrack = (): TrackConfig => ({
   description: 'Test track',
   prompt: 'Test prompt',
   templatePlan: [
-    {
-      title: 'Week 1',
-      milestone: 'Milestone 1',
-      tasks: [{
-        title: 'Task 1',
-        description: 'Build something',
-        deliverable: 'Build and deploy a working app',
-        acceptanceCriteria: ['Works correctly', 'Is deployed']
-      }]
-    }
+    { title: 'Week 1', deliverable: 'Build and deploy a working app', doneCriteria: ['Works correctly', 'Is deployed'], submitFields: ['link'], estimateHours: 6, firstStep: { action: 'Create a repo', minutes: 10 } },
+    { title: 'Week 2', deliverable: 'Build and deploy a working app', doneCriteria: ['Works correctly', 'Is deployed'], submitFields: ['link'], estimateHours: 6 },
+    { title: 'Week 3', deliverable: 'Build and deploy a working app', doneCriteria: ['Works correctly', 'Is deployed'], submitFields: ['link'], estimateHours: 6 },
   ]
 });
 

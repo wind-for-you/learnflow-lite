@@ -3,36 +3,8 @@ import type { PlanWeekData, WeeklyHours, NDJSONLine as SharedNDJSONLine } from '
 // Week data structure (schema v2) - single source of truth lives in lib/shared/plan.ts
 export type WeekData = PlanWeekData;
 
-/**
- * Legacy (schema v1) template week shape. Only used for template copy that has
- * not yet been rewritten to v2; converted via toPlanWeek() before being streamed.
- */
-export interface LegacyTemplateWeek {
-  title: string;
-  milestone: string;
-  tasks: Task[];
-  resources?: Resource[];
-}
-
-export interface Task {
-  title: string;
-  description: string;
-  deliverable: string;
-  acceptanceCriteria: string[];
-  estimatedHours?: number;
-  references?: Resource[];
-}
-
-export interface Resource {
-  title: string;
-  url: string;
-  type?: 'doc' | 'video' | 'tutorial' | 'tool';
-}
-
 // NDJSON response types
 export type NDJSONLine = SharedNDJSONLine;
-
-export type TemplateWeek = PlanWeekData | LegacyTemplateWeek;
 
 // Track configuration
 export interface TrackConfig {
@@ -40,7 +12,10 @@ export interface TrackConfig {
   name: string;
   description: string;
   prompt: string;
-  templatePlan: TemplateWeek[];
+  /** Default template plan; also defines the AI week count when no selector is given. */
+  templatePlan: PlanWeekData[];
+  /** Optional deterministic tier selection by answers.weeklyHours. */
+  selectTemplatePlan?: (weeklyHours: number) => PlanWeekData[];
 }
 
 // API request types
@@ -76,4 +51,9 @@ export interface Env {
   LLM_MODEL?: string;
   RATE_LIMIT_PER_DEVICE_PER_DAY?: string;
   RATE_LIMIT_PER_IP_PER_DAY?: string;
+}
+
+/** Template plan for the request's weeklyHours tier; its length is the plan's week count. */
+export function getTemplatePlan(track: TrackConfig, weeklyHours: number): PlanWeekData[] {
+  return track.selectTemplatePlan ? track.selectTemplatePlan(weeklyHours) : track.templatePlan;
 }

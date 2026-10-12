@@ -1,5 +1,5 @@
 import type { ZodIssue } from 'zod';
-import type { WeekData, PlanRequest, PlanAnswers, WaitlistRequest, TemplateWeek, LegacyTemplateWeek } from '../types';
+import type { WeekData, PlanRequest, PlanAnswers, WaitlistRequest } from '../types';
 import { PlanWeekData, WeeklyHours, type WeekRejectReason } from '../../shared/plan';
 
 export const ALLOWED_WEEKLY_HOURS = [5, 10, 15, 20] as const;
@@ -218,44 +218,3 @@ export function isVagueDeliverable(deliverable: string): boolean {
   return !ARTIFACT_WORDS.some(w => (/^[a-z]+$/.test(w) ? new RegExp(`\\b${w}\\b`).test(lower) : lower.includes(w)));
 }
 
-function clip(text: string, max: number): string {
-  return text.length <= max ? text : text.slice(0, max);
-}
-
-function isLegacyWeek(week: TemplateWeek): week is LegacyTemplateWeek {
-  return 'tasks' in week && Array.isArray((week as LegacyTemplateWeek).tasks);
-}
-
-/**
- * Convert a template week to a valid v2 PlanWeekData for the given context.
- * Legacy (v1) template copy is mapped mechanically (no copy rewrite); estimateHours is
- * clamped to weeklyHours and week 1 gets a default firstStep if missing.
- */
-export function toPlanWeek(week: TemplateWeek, ctx: WeekValidationContext): WeekData {
-  let base: WeekData;
-  if (isLegacyWeek(week)) {
-    const task = week.tasks[0];
-    const refs = [...(week.resources ?? []), ...week.tasks.flatMap(t => t.references ?? [])]
-      .slice(0, 3)
-      .map(r => ({ title: r.title, url: r.url }));
-    const criteria = (task?.acceptanceCriteria ?? [])
-      .filter(c => c.trim().length >= 4)
-      .slice(0, 3)
-      .map(c => clip(c, 80));
-    base = {
-      title: clip(week.title, 30),
-      deliverable: clip(task?.deliverable ?? week.milestone, 120),
-      doneCriteria: criteria.length ? criteria : ['提交交付物链接'],
-      submitFields: ['link'],
-      estimateHours: Math.round(task?.estimatedHours ?? ctx.weeklyHours),
-      ...(refs.length ? { resources: refs } : {}),
-    };
-  } else {
-    base = { ...week };
-  }
-  base.estimateHours = Math.max(1, Math.min(base.estimateHours, ctx.weeklyHours, 40));
-  if (ctx.index === 0 && !base.firstStep) {
-    base.firstStep = { action: '注册 GitHub 账号并新建第一个仓库', minutes: 15 };
-  }
-  return PlanWeekData.parse(base);
-}
