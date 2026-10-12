@@ -110,8 +110,9 @@ jobs:
       
       - name: 检查 Worker 体积
         run: |
-          if [ -f .worker-next/index.mjs ]; then
-            SIZE=$(stat -f%z .worker-next/index.mjs 2>/dev/null || stat -c%s .worker-next/index.mjs)
+          WORKER_FILE=".open-next/server-functions/default/index.mjs"
+          if [ -f "$WORKER_FILE" ]; then
+            SIZE=$(stat -c%s "$WORKER_FILE")
             MAX_SIZE=$((3 * 1024 * 1024))
             THRESHOLD=$((MAX_SIZE * 70 / 100))
             
@@ -123,11 +124,14 @@ jobs:
               exit 1
             fi
             echo "✅ Worker 体积在限制内"
+          else
+            echo "❌ 找不到 Worker 文件"
+            exit 1
           fi
       
       - name: 检查是否泄露密钥
         run: |
-          if grep -r "AMPLITUDE_API_KEY" .worker-next/ .open-next/ 2>/dev/null | grep -v "process.env"; then
+          if grep -r "AMPLITUDE_API_KEY" .open-next/ 2>/dev/null | grep -v "process.env"; then
             echo "❌ 构建产物中发现密钥泄露"
             exit 1
           fi
@@ -137,3 +141,38 @@ jobs:
         run: pnpm deploy:dry
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  e2e:
+    name: E2E 测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+      
+      - name: 安装 Playwright
+        run: npx playwright install --with-deps chromium
+      
+      - name: 构建
+        run: pnpm build:next
+      
+      - name: 运行 E2E 测试
+        run: pnpm test:e2e
+      
+      - name: 上传测试报告
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: artifacts/
+          retention-days: 30
