@@ -2,10 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
-import type { WeekPlan } from '@/lib/mock/plan-data';
+import type { PlanWeekData } from '@/lib/shared/plan';
+
+const clean = (text: string, max: number) => {
+  const safe = text.replace(/["<>]/g, '');
+  return safe.length > max ? `${safe.slice(0, max)}…` : safe;
+};
 
 interface RoadmapRendererProps {
-  weeks: Array<WeekPlan & { index: number }>;
+  weeks: Array<Pick<PlanWeekData, 'title' | 'deliverable'> & { index: number }>;
 }
 
 export function RoadmapRenderer({ weeks }: RoadmapRendererProps) {
@@ -18,7 +23,7 @@ export function RoadmapRenderer({ weeks }: RoadmapRendererProps) {
     mermaid.initialize({
       startOnLoad: false,
       theme: 'default',
-      securityLevel: 'loose',
+      securityLevel: 'strict',
     });
 
     const renderDiagram = async () => {
@@ -26,7 +31,7 @@ export function RoadmapRenderer({ weeks }: RoadmapRendererProps) {
         const nodes = weeks
           .map((week, idx) => {
             const nodeId = `week${idx}`;
-            const label = `第${idx + 1}周<br/>${week.title}`;
+            const label = `第${idx + 1}周 ${clean(week.title, 30)}<br/>${clean(week.deliverable, 24)}`;
             return `  ${nodeId}["${label}"]`;
           })
           .join('\n');
