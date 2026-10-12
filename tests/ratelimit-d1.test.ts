@@ -3,9 +3,11 @@
  * 
  * Tests atomic rate limiting behavior with real D1 database via getPlatformProxy
  * Run with: pnpm test:d1
+ * 
+ * @vitest-environment node
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { getPlatformProxy } from 'wrangler';
 import { checkRateLimit } from '../lib/server/ratelimit';
 import type { Env } from '../lib/server/types';
