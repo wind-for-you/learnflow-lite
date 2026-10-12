@@ -16,8 +16,13 @@ import {
 } from '@/lib/mock/plan-api';
 import { trackEvent } from '@/lib/analytics/client';
 import { WeekCard } from '@/components/week-card';
-import { RoadmapRenderer } from '@/components/roadmap-renderer';
+import dynamic from 'next/dynamic';
 import { FeedbackWidget } from '@/components/feedback-widget';
+
+const RoadmapRenderer = dynamic(
+  () => import('@/components/roadmap-renderer').then((mod) => mod.RoadmapRenderer),
+  { ssr: false, loading: () => <p className="text-sm text-gray-500">路线图加载中...</p> }
+);
 
 const EXPANDED_WEEKS = 4;
 const SCENARIOS: ClientScenario[] = ['ok', 'fail', 'truncate', 'not_found', 'rate_limited', 'offline'];

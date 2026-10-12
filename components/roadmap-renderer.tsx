@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import mermaid from 'mermaid';
 import type { PlanWeekData } from '@/lib/shared/plan';
 
 const clean = (text: string, max: number) => {
@@ -20,13 +19,14 @@ export function RoadmapRenderer({ weeks }: RoadmapRendererProps) {
   useEffect(() => {
     if (!containerRef.current || weeks.length === 0) return;
 
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: 'default',
-      securityLevel: 'strict',
-    });
-
     const renderDiagram = async () => {
+      // mermaid 体积很大，只在浏览器端按需加载，避免打进 Worker
+      const { default: mermaid } = await import('mermaid');
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'default',
+        securityLevel: 'strict',
+      });
       try {
         const nodes = weeks
           .map((week, idx) => {
