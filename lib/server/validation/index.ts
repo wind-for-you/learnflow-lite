@@ -1,4 +1,8 @@
-import type { WeekData, PlanRequest, WaitlistRequest } from '../types';
+import type { ZodIssue } from 'zod';
+import type { WeekData, PlanRequest, PlanAnswers, WaitlistRequest, TemplateWeek, LegacyTemplateWeek } from '../types';
+import { PlanWeekData, WeeklyHours, type WeekRejectReason } from '../../shared/plan';
+
+export const ALLOWED_WEEKLY_HOURS = [5, 10, 15, 20] as const;
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_ANSWER_LENGTH = 2000;
@@ -31,7 +35,11 @@ export function validatePlanRequest(req: unknown): PlanRequest {
 
   // Validate answer lengths
   const answersObj = answers as Record<string, unknown>;
+  if (!WeeklyHours.safeParse(answersObj.weeklyHours).success) {
+    throw new ValidationError('answers.weeklyHours is required and must be one of 5, 10, 15, 20');
+  }
   for (const [key, value] of Object.entries(answersObj)) {
+    if (key === 'weeklyHours') continue;
     if (typeof value !== 'string') {
       throw new ValidationError(`Answer for "${key}" must be a string`);
     }
@@ -79,7 +87,7 @@ export function validatePlanRequest(req: unknown): PlanRequest {
 
   return { 
     trackId: trackId as string, 
-    answers: answersObj as Record<string, string>, 
+    answers: answersObj as PlanAnswers, 
     deviceId: deviceId as string, 
     weeks: weeks as number[] | undefined, 
     keptWeeks: keptWeeks as { index: number; title: string }[] | undefined 
@@ -134,101 +142,120 @@ export function validateWaitlistRequest(req: unknown): WaitlistRequest {
   return { email, feedback, deviceId, page };
 }
 
-export function validateWeekData(data: unknown): WeekData | null {
-  if (!data || typeof data !== 'object') {
-    return null;
-  }
-
-  const dataObj = data as Record<string, unknown>;
-  const { title, milestone, tasks, resources } = dataObj;
-
-  if (!title || typeof title !== 'string' || title.trim().length === 0) {
-    return null;
-  }
-
-  if (!milestone || typeof milestone !== 'string' || milestone.trim().length === 0) {
-    return null;
-  }
-
-  if (!Array.isArray(tasks) || tasks.length === 0) {
-    return null;
-  }
-
-  // Validate at least one task has a concrete deliverable
-  let hasConcreteDeliverable = false;
-  for (const task of tasks) {
-    if (!task || typeof task !== 'object') {
-      return null;
-    }
-    
-    const taskObj = task as Record<string, unknown>;
-    const { title: taskTitle, description, deliverable, acceptanceCriteria } = taskObj;
-    
-    if (!taskTitle || typeof taskTitle !== 'string') {
-      return null;
-    }
-    
-    if (!description || typeof description !== 'string') {
-      return null;
-    }
-    
-    if (!deliverable || typeof deliverable !== 'string' || deliverable.trim().length === 0) {
-      return null;
-    }
-    
-    if (!Array.isArray(acceptanceCriteria) || acceptanceCriteria.length === 0) {
-      return null;
-    }
-    
-    if (!acceptanceCriteria.every(c => typeof c === 'string' && c.trim().length > 0)) {
-      return null;
-    }
-
-    // Check if this task has a concrete deliverable (not vague learning)
-    if (deliverable.length > 10 && !isVagueDeliverable(deliverable)) {
-      hasConcreteDeliverable = true;
-    }
-  }
-
-  if (!hasConcreteDeliverable) {
-    return null;
-  }
-
-  // Validate optional resources
-  if (resources !== undefined) {
-    if (!Array.isArray(resources)) {
-      return null;
-    }
-    for (const resource of resources) {
-      if (!resource || typeof resource !== 'object') {
-        return null;
-      }
-      const resourceObj = resource as Record<string, unknown>;
-      if (!resourceObj.title || typeof resourceObj.title !== 'string') {
-        return null;
-      }
-      if (!resourceObj.url || typeof resourceObj.url !== 'string') {
-        return null;
-      }
-    }
-  }
-
-  return data as WeekData;
+export interface WeekValidationContext {
+  /** 0-based week index */
+  index: number;
+  /** answers.weeklyHours (5|10|15|20; 20 means 20+) */
+  weeklyHours: number;
 }
 
-function isVagueDeliverable(deliverable: string): boolean {
-  const vaguePhrases = [
-    'learn',
-    'study',
-    'understand',
-    'read about',
-    'familiarize',
-    'explore',
-    'basics',
-    'introduction',
-    'overview'
-  ];
-  
+export type WeekValidationResult =
+  | { ok: true; data: WeekData }
+  | { ok: false; reason: WeekRejectReason };
+
+function issueToReason(issue: ZodIssue): WeekRejectReason {
+  const field = issue.path[0];
+  switch (field) {
+    case 'deliverable':
+      return 'missing_deliverable';
+    case 'doneCriteria':
+      return 'missing_done_criteria';
+    case 'estimateHours':
+      return 'bad_estimate';
+    case 'firstStep':
+      return 'missing_first_step';
+    default:
+      // title / submitFields / resources or non-object: structurally malformed output
+      return 'json_parse';
+  }
+}
+
+/**
+ * Validate a model-produced week against PlanWeekData (schema v2) plus server-only rules:
+ * - week 1 (index 0) must include firstStep
+ * - estimateHours <= weeklyHours
+ * - deliverable must not be vague (only 理解/了解/掌握/熟悉-style verbs with no concrete artifact)
+ * Unknown keys (e.g. `index`) are stripped.
+ */
+export function validateWeekData(data: unknown, ctx: WeekValidationContext): WeekValidationResult {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return { ok: false, reason: 'json_parse' };
+  }
+  const parsed = PlanWeekData.safeParse(data);
+  if (!parsed.success) {
+    // Report the most relevant issue first: deliverable > doneCriteria > estimate > firstStep > other
+    const order: WeekRejectReason[] = ['missing_deliverable', 'missing_done_criteria', 'bad_estimate', 'missing_first_step', 'json_parse'];
+    const reasons = parsed.error.issues.map(issueToReason);
+    const reason = order.find(r => reasons.includes(r)) ?? 'json_parse';
+    return { ok: false, reason };
+  }
+  const week = parsed.data;
+  if (isVagueDeliverable(week.deliverable)) {
+    return { ok: false, reason: 'vague_deliverable' };
+  }
+  if (ctx.index === 0 && !week.firstStep) {
+    return { ok: false, reason: 'missing_first_step' };
+  }
+  if (week.estimateHours > ctx.weeklyHours) {
+    return { ok: false, reason: 'over_budget' };
+  }
+  return { ok: true, data: week };
+}
+
+const VAGUE_WORDS = ['理解', '了解', '掌握', '熟悉', '学习', '认识', '入门', 'learn', 'understand', 'familiarize', 'study', 'get familiar'];
+const ARTIFACT_WORDS = [
+  '部署', '上线', '提交', '链接', '仓库', '页面', '网页', '网站', '应用', 'app', '项目', '代码', '截图',
+  '文档', '报告', '笔记', 'readme', '接口', 'api', '脚本', '组件', '测试', '简历', 'pr', 'demo', '作品',
+  '实现', '写出', '做出', '编写', '构建', '搭建', '开发', '发布', '录制', '视频', '表格', '清单',
+  'build', 'deploy', 'submit', 'ship', 'publish', 'write', 'create', 'implement', 'repo', 'link',
+];
+
+/** True when the deliverable only expresses learning (理解/了解/掌握/熟悉...) without a concrete artifact. */
+export function isVagueDeliverable(deliverable: string): boolean {
   const lower = deliverable.toLowerCase();
-  return vaguePhrases.some(phrase => lower.includes(phrase) && !lower.includes('build') && !lower.includes('deploy'));
+  const hasVague = VAGUE_WORDS.some(w => lower.includes(w));
+  if (!hasVague) return false;
+  return !ARTIFACT_WORDS.some(w => (/^[a-z]+$/.test(w) ? new RegExp(`\\b${w}\\b`).test(lower) : lower.includes(w)));
+}
+
+function clip(text: string, max: number): string {
+  return text.length <= max ? text : text.slice(0, max);
+}
+
+function isLegacyWeek(week: TemplateWeek): week is LegacyTemplateWeek {
+  return 'tasks' in week && Array.isArray((week as LegacyTemplateWeek).tasks);
+}
+
+/**
+ * Convert a template week to a valid v2 PlanWeekData for the given context.
+ * Legacy (v1) template copy is mapped mechanically (no copy rewrite); estimateHours is
+ * clamped to weeklyHours and week 1 gets a default firstStep if missing.
+ */
+export function toPlanWeek(week: TemplateWeek, ctx: WeekValidationContext): WeekData {
+  let base: WeekData;
+  if (isLegacyWeek(week)) {
+    const task = week.tasks[0];
+    const refs = [...(week.resources ?? []), ...week.tasks.flatMap(t => t.references ?? [])]
+      .slice(0, 3)
+      .map(r => ({ title: r.title, url: r.url }));
+    const criteria = (task?.acceptanceCriteria ?? [])
+      .filter(c => c.trim().length >= 4)
+      .slice(0, 3)
+      .map(c => clip(c, 80));
+    base = {
+      title: clip(week.title, 30),
+      deliverable: clip(task?.deliverable ?? week.milestone, 120),
+      doneCriteria: criteria.length ? criteria : ['提交交付物链接'],
+      submitFields: ['link'],
+      estimateHours: Math.round(task?.estimatedHours ?? ctx.weeklyHours),
+      ...(refs.length ? { resources: refs } : {}),
+    };
+  } else {
+    base = { ...week };
+  }
+  base.estimateHours = Math.max(1, Math.min(base.estimateHours, ctx.weeklyHours, 40));
+  if (ctx.index === 0 && !base.firstStep) {
+    base.firstStep = { action: '注册 GitHub 账号并新建第一个仓库', minutes: 15 };
+  }
+  return PlanWeekData.parse(base);
 }

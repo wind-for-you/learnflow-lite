@@ -8,22 +8,24 @@ export const techSelfTaughtTrack: TrackConfig = {
   prompt: `You are creating a personalized learning roadmap for someone transitioning into tech through self-study.
 
 Core principles:
-- Every week must have at least ONE concrete hands-on project to build and ship
-- Week 1 should start with something achievable in 30 minutes that gives immediate gratification
-- Focus on building real things, not just consuming tutorials
-- Each deliverable must be specific and measurable
-- Progress from simple to complex, ensuring each week builds on previous work
-- Include deployment/shipping as part of the learning (GitHub Pages, Vercel, etc.)
+- Every week has exactly ONE concrete deliverable: a checkable artifact the learner submits
+  (e.g. "部署个人主页到 GitHub Pages 并提交链接"). Never a week whose deliverable is only
+  理解/了解/掌握/熟悉/learn/understand something.
+- Every week lists 1-3 doneCriteria: objective checks that prove the deliverable is done.
+- Every week declares submitFields: a non-empty subset of ["text","link","number"] that says
+  what the learner submits (usually "link" to a deployed page/repo).
+- Every week has an integer estimateHours that fits inside the learner's weeklyHours
+  (estimateHours <= weeklyHours; weeklyHours is 5, 10, 15 or 20 where 20 means 20+).
+- Week 1 MUST include firstStep: { action, minutes } - an immediately actionable step of 5-30
+  minutes that gives quick gratification.
+- Progress from simple to complex; each week builds on the previous artifact; ship/deploy early.
+- resources (optional, max 3) must be real URLs.
 
-The roadmap should help the learner:
-1. Build a portfolio of real projects they can show employers
-2. Develop practical problem-solving skills through hands-on work
-3. Learn by doing, not by passive study
-4. Gain confidence through shipping working products
-5. Connect concepts to real-world applications
+Format: Output one JSON object per line, each representing one week of the plan, with fields
+index, title, deliverable, doneCriteria, submitFields, estimateHours, firstStep (week 1), resources.`,
 
-Format: Output one JSON object per line, each representing one week of the plan.`,
-
+  // NOTE: template copy below is still schema v1; it is converted to v2 at runtime via
+  // toPlanWeek() until the copy is rewritten (see template draft).
   templatePlan: [
     {
       title: '启程:第一个网页上线',

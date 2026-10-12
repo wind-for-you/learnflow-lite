@@ -42,42 +42,9 @@ const mockTrackConfig: TrackConfig = {
   description: 'Test track for testing',
   prompt: 'Generate a test learning plan',
   templatePlan: [
-    {
-      title: 'Template Week 1',
-      milestone: 'Template Milestone 1',
-      tasks: [
-        {
-          title: 'Template Task 1',
-          description: 'Template description',
-          deliverable: 'Build and deploy a template project',
-          acceptanceCriteria: ['Criterion 1', 'Criterion 2'],
-        },
-      ],
-    },
-    {
-      title: 'Template Week 2',
-      milestone: 'Template Milestone 2',
-      tasks: [
-        {
-          title: 'Template Task 2',
-          description: 'Template description',
-          deliverable: 'Build and deploy another template project',
-          acceptanceCriteria: ['Criterion 1', 'Criterion 2'],
-        },
-      ],
-    },
-    {
-      title: 'Template Week 3',
-      milestone: 'Template Milestone 3',
-      tasks: [
-        {
-          title: 'Template Task 3',
-          description: 'Template description',
-          deliverable: 'Build and deploy a third template project',
-          acceptanceCriteria: ['Criterion 1', 'Criterion 2'],
-        },
-      ],
-    },
+    { title: 'Template Week 1', deliverable: 'Build and deploy a template project', doneCriteria: ['Criterion 1'], submitFields: ['link'], estimateHours: 6 },
+    { title: 'Template Week 2', deliverable: 'Build and deploy another template project', doneCriteria: ['Criterion 1'], submitFields: ['link'], estimateHours: 6 },
+    { title: 'Template Week 3', deliverable: 'Build and deploy a third template project', doneCriteria: ['Criterion 1'], submitFields: ['link'], estimateHours: 6 },
   ],
 };
 
@@ -92,7 +59,7 @@ describe('PlanGenerator', () => {
     const generator = new PlanGenerator(mockClient as unknown as LLMClient);
     const request = {
       trackId: 'test-track',
-      answers: { level: 'beginner' },
+      answers: { level: 'beginner', weeklyHours: 10 as const },
       deviceId: 'device-123',
     };
 
@@ -140,7 +107,7 @@ describe('PlanGenerator', () => {
     const generator = new PlanGenerator(mockClient as unknown as LLMClient);
     const request = {
       trackId: 'test-track',
-      answers: { level: 'beginner' },
+      answers: { level: 'beginner', weeklyHours: 10 as const },
       deviceId: 'device-123',
     };
 
@@ -179,7 +146,7 @@ describe('PlanGenerator', () => {
     const generator = new PlanGenerator(mockClient as unknown as LLMClient);
     const request = {
       trackId: 'test-track',
-      answers: { level: 'beginner' },
+      answers: { level: 'beginner', weeklyHours: 10 as const },
       deviceId: 'device-123',
     };
 
@@ -216,7 +183,7 @@ describe('PlanGenerator', () => {
     const generator = new PlanGenerator(mockClient as unknown as LLMClient);
     const request = {
       trackId: 'test-track',
-      answers: { level: 'beginner' },
+      answers: { level: 'beginner', weeklyHours: 10 as const },
       deviceId: 'device-123',
       weeks: [1, 2], // Only regenerate weeks 1 and 2
     };
@@ -247,7 +214,7 @@ describe('PlanGenerator', () => {
     const generator = new PlanGenerator(mockClient as unknown as LLMClient);
     const request = {
       trackId: 'test-track',
-      answers: { level: 'beginner' },
+      answers: { level: 'beginner', weeklyHours: 10 as const },
       deviceId: 'device-123',
     };
 
@@ -290,7 +257,7 @@ describe('PlanGenerator', () => {
     const generator = new PlanGenerator(mockClient as unknown as LLMClient);
     const request = {
       trackId: 'test-track',
-      answers: { level: 'beginner' },
+      answers: { level: 'beginner', weeklyHours: 10 as const },
       deviceId: 'device-123',
     };
 

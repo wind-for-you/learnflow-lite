@@ -1,6 +1,7 @@
 import type { PlanRequest, TrackConfig, NDJSONLine } from '../types';
 import { LLMClient } from './client';
-import { validateWeekData } from '../validation';
+import { validateWeekData, toPlanWeek } from '../validation';
+import type { WeekRejectReason } from '../../shared/plan';
 
 export class PlanGenerator {
   private client: LLMClient;
@@ -20,15 +21,15 @@ export class PlanGenerator {
     trackConfig: TrackConfig
   ): AsyncGenerator<NDJSONLine, void, unknown> {
     const { answers, weeks, keptWeeks } = request;
+    const weeklyHours = Number(answers.weeklyHours);
     const totalWeeks = trackConfig.templatePlan.length;
     
     // Determine which weeks to generate
     const weeksToGenerate = weeks || Array.from({ length: totalWeeks }, (_, i) => i);
     const generatedWeeks = new Set<number>();
-    const failedWeeks = new Set<number>();
 
     // Build the prompt
-    const prompt = this.buildPrompt(trackConfig, answers, weeksToGenerate, keptWeeks, totalWeeks);
+    const prompt = this.buildPrompt(trackConfig, answers, weeksToGenerate, keptWeeks, totalWeeks, weeklyHours);
     
     const messages = [
       {
@@ -57,52 +58,15 @@ export class PlanGenerator {
           const trimmed = line.trim();
           if (!trimmed) continue;
           
-          try {
-            const weekData = JSON.parse(trimmed);
-            const validated = validateWeekData(weekData);
-            
-            if (validated && typeof weekData.index === 'number' && weeksToGenerate.includes(weekData.index)) {
-              generatedWeeks.add(weekData.index);
-              yield {
-                type: 'week',
-                index: weekData.index,
-                data: validated,
-                source: 'ai'
-              };
-            } else {
-              // Invalid week data, mark for fallback
-              if (typeof weekData.index === 'number') {
-                failedWeeks.add(weekData.index);
-              }
-            }
-          } catch {
-            // Not valid JSON yet, might be incomplete
-          }
+          const out = this.processLine(trimmed, weeksToGenerate, generatedWeeks, weeklyHours);
+          if (out) yield out;
         }
       }
       
       // Try to parse any remaining content
       if (contentBuffer.trim()) {
-        try {
-          const weekData = JSON.parse(contentBuffer.trim());
-          const validated = validateWeekData(weekData);
-          
-          if (validated && typeof weekData.index === 'number' && weeksToGenerate.includes(weekData.index)) {
-            generatedWeeks.add(weekData.index);
-            yield {
-              type: 'week',
-              index: weekData.index,
-              data: validated,
-              source: 'ai'
-            };
-          } else {
-            if (typeof weekData.index === 'number') {
-              failedWeeks.add(weekData.index);
-            }
-          }
-        } catch {
-          // Ignore incomplete JSON at the end
-        }
+        const line = this.processLine(contentBuffer.trim(), weeksToGenerate, generatedWeeks, weeklyHours);
+        if (line) yield line;
       }
       
       // Fill in any missing weeks with template
@@ -113,7 +77,7 @@ export class PlanGenerator {
           yield {
             type: 'week',
             index,
-            data: trackConfig.templatePlan[index],
+            data: toPlanWeek(trackConfig.templatePlan[index], { index, weeklyHours }),
             source: 'template'
           };
         }
@@ -133,7 +97,7 @@ export class PlanGenerator {
           yield {
             type: 'week',
             index,
-            data: trackConfig.templatePlan[index],
+            data: toPlanWeek(trackConfig.templatePlan[index], { index, weeklyHours }),
             source: 'template'
           };
         }
@@ -147,12 +111,50 @@ export class PlanGenerator {
     }
   }
 
+  private get modelName(): string {
+    const name = (this.client as { modelName?: unknown }).modelName;
+    return typeof name === 'string' ? name : 'unknown';
+  }
+
+  private logReject(weekIndex: number | null, reason: WeekRejectReason) {
+    console.warn(JSON.stringify({ event: 'week_rejected', weekIndex, reason, model: this.modelName }));
+  }
+
+  /** Parse + validate one model output line. Returns a week line, or null (rejected/ignored). */
+  private processLine(
+    raw: string,
+    weeksToGenerate: number[],
+    generatedWeeks: Set<number>,
+    weeklyHours: number
+  ): NDJSONLine | null {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      const m = raw.match(/"index"\s*:\s*(\d+)/);
+      this.logReject(m ? Number(m[1]) : null, 'json_parse');
+      return null;
+    }
+    const index = (parsed as { index?: unknown } | null)?.index;
+    if (typeof index !== 'number' || !weeksToGenerate.includes(index) || generatedWeeks.has(index)) {
+      return null;
+    }
+    const result = validateWeekData(parsed, { index, weeklyHours });
+    if (!result.ok) {
+      this.logReject(index, result.reason);
+      return null;
+    }
+    generatedWeeks.add(index);
+    return { type: 'week', index, data: result.data, source: 'ai' };
+  }
+
   private buildPrompt(
     trackConfig: TrackConfig,
-    answers: Record<string, string>,
+    answers: Record<string, string | number>,
     weeksToGenerate: number[],
     keptWeeks: { index: number; title: string }[] | undefined,
-    totalWeeks: number
+    totalWeeks: number,
+    weeklyHours: number
   ): string {
     let prompt = trackConfig.prompt + '\n\n';
     
@@ -160,7 +162,7 @@ export class PlanGenerator {
     prompt += '```\n';  // Delimiter to treat answers as data
     for (const [key, value] of Object.entries(answers)) {
       // Escape any backticks in user input to prevent breaking delimiter
-      const escapedValue = value.replace(/```/g, '\\`\\`\\`');
+      const escapedValue = String(value).replace(/```/g, '\\`\\`\\`');
       prompt += `${key}: ${escapedValue}\n`;
     }
     prompt += '```\n\n';  // End delimiter
@@ -180,31 +182,17 @@ export class PlanGenerator {
     prompt += `Generate ${weeksToGenerate.length} weeks (indices: ${weeksToGenerate.join(', ')}) out of ${totalWeeks} total weeks.\n`;
     prompt += `Output ONLY valid JSON, one complete object per line.\n\n`;
     
-    prompt += `Each line must be a complete JSON object with this exact structure:\n`;
-    prompt += `{\n`;
-    prompt += `  "index": 0,\n`;
-    prompt += `  "title": "Week title",\n`;
-    prompt += `  "milestone": "What user achieves this week",\n`;
-    prompt += `  "tasks": [\n`;
-    prompt += `    {\n`;
-    prompt += `      "title": "Task name",\n`;
-    prompt += `      "description": "What and why",\n`;
-    prompt += `      "deliverable": "Concrete hands-on output (e.g., 'Build and deploy a Todo List app with CRUD operations')",\n`;
-    prompt += `      "acceptanceCriteria": ["Criterion 1", "Criterion 2"],\n`;
-    prompt += `      "estimatedHours": 8,\n`;
-    prompt += `      "references": [{"title": "Resource name", "url": "https://example.com", "type": "tutorial"}]\n`;
-    prompt += `    }\n`;
-    prompt += `  ],\n`;
-    prompt += `  "resources": [{"title": "Resource name", "url": "https://example.com"}]\n`;
-    prompt += `}\n\n`;
-    
+    prompt += `The learner has ${weeklyHours} hours per week${weeklyHours >= 20 ? ' (20+)' : ''}.\n\n`;
+    prompt += `Each line must be a complete JSON object with this exact structure (schema v2):\n`;
+    prompt += `{"index":0,"title":"<=30 chars","deliverable":"concrete checkable artifact, 8-120 chars","doneCriteria":["1-3 checkable items, 4-80 chars each"],"submitFields":["link"],"estimateHours":${Math.min(weeklyHours, 8)},"firstStep":{"action":"4-60 chars","minutes":15},"resources":[{"title":"Resource name","url":"https://example.com"}]}\n\n`;
     prompt += `CRITICAL REQUIREMENTS:\n`;
-    prompt += `1. Every week MUST have at least one task with a concrete deliverable - a hands-on project that can be built and shipped\n`;
-    prompt += `2. NO vague items like "learn JavaScript basics" or "understand React concepts"\n`;
-    prompt += `3. Week 1 Day 1 task must be doable in 30 minutes and immediately actionable\n`;
-    prompt += `4. Each deliverable must be specific: "Build X with features Y and Z and deploy to platform P"\n`;
-    prompt += `5. Include real URLs in references (official docs, quality tutorials)\n`;
-    prompt += `6. Output ONLY complete JSON objects, one per line, no markdown, no explanations\n\n`;
+    prompt += `1. "deliverable" MUST be a concrete artifact the learner submits (e.g. "部署个人主页到 GitHub Pages 并提交链接"). NEVER only 理解/了解/掌握/熟悉/learn/understand something\n`;
+    prompt += `2. "doneCriteria": 1-3 objectively checkable items\n`;
+    prompt += `3. "submitFields": non-empty subset of ["text","link","number"] describing what the learner submits\n`;
+    prompt += `4. "estimateHours": integer from 1 to ${weeklyHours}; MUST NOT exceed ${weeklyHours}\n`;
+    prompt += `5. Week 1 (index 0) MUST include "firstStep": an immediately actionable step with minutes between 5 and 30\n`;
+    prompt += `6. "resources" optional, at most 3, real URLs (official docs, quality tutorials)\n`;
+    prompt += `7. Output ONLY complete JSON objects, one per line, no markdown, no explanations\n\n`;
     
     prompt += `Start generating now. Output only JSON lines:`;
     

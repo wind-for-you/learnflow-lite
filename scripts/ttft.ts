@@ -62,6 +62,7 @@ async function measureTTFT(): Promise<number> {
         trackId: 'test-ttft',
         answers: {
           level: 'beginner',
+          weeklyHours: 10,
           goal: 'learn web development'
         },
         deviceId: 'ttft-test',
@@ -71,8 +72,8 @@ async function measureTTFT(): Promise<number> {
     )) {
       if (line.type === 'week' && firstValidWeekTime === null) {
         // Validate that it's actually a valid week
-        const validated = validateWeekData(line.data);
-        if (validated) {
+        const validated = validateWeekData(line.data, { index: line.index, weeklyHours: 10 });
+        if (validated.ok) {
           firstValidWeekTime = performance.now();
           break; // Stop after first valid week
         }

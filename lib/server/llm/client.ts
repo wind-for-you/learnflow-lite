@@ -19,6 +19,10 @@ export class LLMClient {
   private apiKey: string;
   private model: string;
 
+  get modelName(): string {
+    return this.model;
+  }
+
   constructor(env: Env, _timeoutMs = 60000) {
     this.baseURL = env.LLM_BASE_URL;
     this.apiKey = env.LLM_API_KEY;

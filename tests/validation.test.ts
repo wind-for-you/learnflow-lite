@@ -3,8 +3,12 @@ import {
   validatePlanRequest,
   validateWaitlistRequest,
   validateWeekData,
+  isVagueDeliverable,
+  toPlanWeek,
   ValidationError,
 } from '../lib/server/validation';
+import { PlanWeekData } from '../lib/shared/plan';
+import { techSelfTaughtTrack } from '../config/tracks/server/tech-self-taught';
 
 describe('validatePlanRequest', () => {
   it('should validate a correct plan request', () => {
@@ -13,6 +17,7 @@ describe('validatePlanRequest', () => {
       answers: {
         currentLevel: 'beginner',
         targetRole: 'frontend developer',
+        weeklyHours: 10,
       },
       deviceId: 'device-123',
     };
@@ -23,7 +28,7 @@ describe('validatePlanRequest', () => {
 
   it('should reject missing trackId', () => {
     const request = {
-      answers: { level: 'beginner' },
+      answers: { level: 'beginner', weeklyHours: 10 },
       deviceId: 'device-123',
     };
 
@@ -44,7 +49,7 @@ describe('validatePlanRequest', () => {
   it('should reject missing deviceId', () => {
     const request = {
       trackId: 'tech-self-taught',
-      answers: { level: 'beginner' },
+      answers: { level: 'beginner', weeklyHours: 10 },
     };
 
     expect(() => validatePlanRequest(request)).toThrow(ValidationError);
@@ -56,6 +61,7 @@ describe('validatePlanRequest', () => {
       trackId: 'tech-self-taught',
       answers: {
         longAnswer: 'a'.repeat(2001),
+        weeklyHours: 10,
       },
       deviceId: 'device-123',
     };
@@ -67,7 +73,7 @@ describe('validatePlanRequest', () => {
   it('should validate optional weeks array', () => {
     const request = {
       trackId: 'tech-self-taught',
-      answers: { level: 'beginner' },
+      answers: { level: 'beginner', weeklyHours: 10 },
       deviceId: 'device-123',
       weeks: [0, 2, 5],
     };
@@ -79,7 +85,7 @@ describe('validatePlanRequest', () => {
   it('should reject invalid weeks array', () => {
     const request = {
       trackId: 'tech-self-taught',
-      answers: { level: 'beginner' },
+      answers: { level: 'beginner', weeklyHours: 10 },
       deviceId: 'device-123',
       weeks: [0, -1, 5],
     };
@@ -91,7 +97,7 @@ describe('validatePlanRequest', () => {
   it('should validate keptWeeks array', () => {
     const request = {
       trackId: 'tech-self-taught',
-      answers: { level: 'beginner' },
+      answers: { level: 'beginner', weeklyHours: 10 },
       deviceId: 'device-123',
       keptWeeks: [
         { index: 0, title: 'Week 1' },
@@ -186,173 +192,77 @@ describe('validateWaitlistRequest', () => {
   });
 });
 
-describe('validateWeekData', () => {
-  it('should validate correct week data', () => {
-    const weekData = {
-      title: 'Week 1: Getting Started',
-      milestone: 'Complete first project',
-      tasks: [
-        {
-          title: 'Build a website',
-          description: 'Create a personal portfolio',
-          deliverable: 'Build and deploy a portfolio website with 3 projects',
-          acceptanceCriteria: [
-            'Website is responsive',
-            'Deployed to GitHub Pages',
-          ],
-          estimatedHours: 8,
-          references: [
-            { title: 'HTML Tutorial', url: 'https://example.com' },
-          ],
-        },
-      ],
-      resources: [
-        { title: 'MDN', url: 'https://developer.mozilla.org' },
-      ],
-    };
+describe('validatePlanRequest weeklyHours', () => {
+  const base = { trackId: 'tech-self-taught', deviceId: 'device-123' };
+  it.each([5, 10, 15, 20])('accepts weeklyHours=%i', (h) => {
+    expect(validatePlanRequest({ ...base, answers: { weeklyHours: h } }).answers.weeklyHours).toBe(h);
+  });
+  it.each([[undefined], [0], [8], [25], ['10'], [10.5]])('rejects weeklyHours=%s', (h) => {
+    expect(() => validatePlanRequest({ ...base, answers: { weeklyHours: h } })).toThrow('weeklyHours');
+  });
+});
 
-    const result = validateWeekData(weekData);
-    expect(result).toEqual(weekData);
+const goodWeek = (overrides: Record<string, unknown> = {}) => ({
+  title: 'Week 1: Getting Started',
+  deliverable: '部署个人主页到 GitHub Pages 并提交链接',
+  doneCriteria: ['页面可公开访问', '包含自我介绍'],
+  submitFields: ['link'],
+  estimateHours: 6,
+  firstStep: { action: '注册 GitHub 并新建仓库', minutes: 15 },
+  resources: [{ title: 'MDN', url: 'https://developer.mozilla.org' }],
+  ...overrides,
+});
+const ctx0 = { index: 0, weeklyHours: 10 };
+const ctx1 = { index: 1, weeklyHours: 10 };
+
+describe('validateWeekData (schema v2)', () => {
+  it('accepts a valid week and strips unknown keys', () => {
+    const result = validateWeekData({ index: 0, ...goodWeek() }, ctx0);
+    expect(result).toEqual({ ok: true, data: goodWeek() });
   });
 
-  it('should reject week data without title', () => {
-    const weekData = {
-      milestone: 'Complete first project',
-      tasks: [
-        {
-          title: 'Build a website',
-          description: 'Create a personal portfolio',
-          deliverable: 'Build and deploy a portfolio website',
-          acceptanceCriteria: ['Website is responsive'],
-        },
-      ],
-    };
-
-    const result = validateWeekData(weekData);
-    expect(result).toBeNull();
+  it('accepts week > 1 without firstStep', () => {
+    const { firstStep: _f, ...rest } = goodWeek();
+    expect(validateWeekData(rest, ctx1).ok).toBe(true);
   });
 
-  it('should reject week data without milestone', () => {
-    const weekData = {
-      title: 'Week 1',
-      tasks: [
-        {
-          title: 'Build a website',
-          description: 'Create a personal portfolio',
-          deliverable: 'Build and deploy a portfolio website',
-          acceptanceCriteria: ['Website is responsive'],
-        },
-      ],
-    };
-
-    const result = validateWeekData(weekData);
-    expect(result).toBeNull();
+  const rejects: [string, unknown, { index: number; weeklyHours: number }][] = [
+    ['missing_deliverable', goodWeek({ deliverable: undefined }), ctx1],
+    ['missing_deliverable', goodWeek({ deliverable: '太短' }), ctx1],
+    ['missing_done_criteria', goodWeek({ doneCriteria: [] }), ctx1],
+    ['missing_done_criteria', goodWeek({ doneCriteria: ['a1', 'b2', 'c3', 'd4'].map(x => x + '项检查') }), ctx1],
+    ['vague_deliverable', goodWeek({ deliverable: '理解并掌握 JavaScript 的基本概念' }), ctx1],
+    ['vague_deliverable', goodWeek({ deliverable: '了解和熟悉 React 生态' }), ctx1],
+    ['bad_estimate', goodWeek({ estimateHours: 0 }), ctx1],
+    ['bad_estimate', goodWeek({ estimateHours: 2.5 }), ctx1],
+    ['bad_estimate', goodWeek({ estimateHours: 41 }), { index: 1, weeklyHours: 20 }],
+    ['over_budget', goodWeek({ estimateHours: 12 }), ctx1],
+    ['over_budget', goodWeek({ estimateHours: 6 }), { index: 1, weeklyHours: 5 }],
+    ['missing_first_step', goodWeek({ firstStep: undefined }), ctx0],
+    ['missing_first_step', goodWeek({ firstStep: { action: '注册 GitHub', minutes: 45 } }), ctx0],
+    ['json_parse', null, ctx1],
+    ['json_parse', 'not an object', ctx1],
+    ['json_parse', goodWeek({ submitFields: [] }), ctx1],
+  ];
+  it.each(rejects)('rejects with %s', (reason, data, ctx) => {
+    expect(validateWeekData(data, ctx)).toEqual({ ok: false, reason });
   });
 
-  it('should reject week data without tasks', () => {
-    const weekData = {
-      title: 'Week 1',
-      milestone: 'Complete first project',
-      tasks: [],
-    };
-
-    const result = validateWeekData(weekData);
-    expect(result).toBeNull();
+  it('does not flag deliverable with concrete artifact as vague', () => {
+    expect(isVagueDeliverable('理解闭包并写出 3 个示例代码提交仓库链接')).toBe(false);
+    expect(isVagueDeliverable('掌握 Flexbox')).toBe(true);
   });
+});
 
-  it('should reject week data with vague deliverable', () => {
-    const weekData = {
-      title: 'Week 1',
-      milestone: 'Learn JavaScript',
-      tasks: [
-        {
-          title: 'Study JavaScript',
-          description: 'Learn the basics',
-          deliverable: 'Learn JavaScript basics',
-          acceptanceCriteria: ['Understand variables', 'Understand functions'],
-        },
-      ],
-    };
-
-    const result = validateWeekData(weekData);
-    expect(result).toBeNull();
-  });
-
-  it('should accept deliverable with "learn" if it includes "build"', () => {
-    const weekData = {
-      title: 'Week 1',
-      milestone: 'First project',
-      tasks: [
-        {
-          title: 'Learn by building',
-          description: 'Build to learn',
-          deliverable: 'Learn React by building and deploying a Todo app',
-          acceptanceCriteria: ['App has CRUD features', 'Deployed online'],
-        },
-      ],
-    };
-
-    const result = validateWeekData(weekData);
-    expect(result).not.toBeNull();
-  });
-
-  it('should reject task without acceptance criteria', () => {
-    const weekData = {
-      title: 'Week 1',
-      milestone: 'First project',
-      tasks: [
-        {
-          title: 'Build a website',
-          description: 'Create a portfolio',
-          deliverable: 'Build and deploy a portfolio website',
-          acceptanceCriteria: [],
-        },
-      ],
-    };
-
-    const result = validateWeekData(weekData);
-    expect(result).toBeNull();
-  });
-
-  it('should validate optional resources', () => {
-    const weekData = {
-      title: 'Week 1',
-      milestone: 'First project',
-      tasks: [
-        {
-          title: 'Build a website',
-          description: 'Create a portfolio',
-          deliverable: 'Build and deploy a portfolio website',
-          acceptanceCriteria: ['Deployed online'],
-        },
-      ],
-      resources: [
-        { title: 'MDN', url: 'https://developer.mozilla.org' },
-      ],
-    };
-
-    const result = validateWeekData(weekData);
-    expect(result).toEqual(weekData);
-  });
-
-  it('should reject invalid resources', () => {
-    const weekData = {
-      title: 'Week 1',
-      milestone: 'First project',
-      tasks: [
-        {
-          title: 'Build a website',
-          description: 'Create a portfolio',
-          deliverable: 'Build and deploy a portfolio website',
-          acceptanceCriteria: ['Deployed online'],
-        },
-      ],
-      resources: [
-        { title: 'MDN' }, // Missing url
-      ],
-    };
-
-    const result = validateWeekData(weekData);
-    expect(result).toBeNull();
+describe('toPlanWeek', () => {
+  it('converts every real template week into valid v2 data for every weeklyHours', () => {
+    for (const weeklyHours of [5, 10, 15, 20]) {
+      techSelfTaughtTrack.templatePlan.forEach((week, index) => {
+        const data = toPlanWeek(week, { index, weeklyHours });
+        expect(PlanWeekData.safeParse(data).success).toBe(true);
+        expect(data.estimateHours).toBeLessThanOrEqual(weeklyHours);
+        if (index === 0) expect(data.firstStep).toBeDefined();
+      });
+    }
   });
 });

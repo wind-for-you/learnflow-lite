@@ -43,7 +43,7 @@ describe('Contract: LLM returns malformed JSON line', () => {
     const results: NDJSONLine[] = [];
     
     for await (const line of generator.generatePlan(
-      { trackId: 'test', answers: {}, deviceId: 'test', weeks: [0, 1, 2] },
+      { trackId: 'test', answers: { weeklyHours: 10 as const }, deviceId: 'test', weeks: [0, 1, 2] },
       createTestTrack()
     )) {
       results.push(line);
@@ -71,7 +71,7 @@ describe('Contract: LLM returns malformed JSON line', () => {
     const results: NDJSONLine[] = [];
     
     for await (const line of generator.generatePlan(
-      { trackId: 'test', answers: {}, deviceId: 'test' },
+      { trackId: 'test', answers: { weeklyHours: 10 as const }, deviceId: 'test' },
       createTestTrack()
     )) {
       results.push(line);
@@ -94,15 +94,15 @@ describe('Contract: Upstream stream cut mid-way', () => {
     const track: TrackConfig = {
       ...createTestTrack(),
       templatePlan: [
-        { title: 'T1', milestone: 'M1', tasks: [{ title: 'Task', description: 'Desc', deliverable: 'Build app A', acceptanceCriteria: ['A1'] }] },
-        { title: 'T2', milestone: 'M2', tasks: [{ title: 'Task', description: 'Desc', deliverable: 'Build app B', acceptanceCriteria: ['B1'] }] },
-        { title: 'T3', milestone: 'M3', tasks: [{ title: 'Task', description: 'Desc', deliverable: 'Build app C', acceptanceCriteria: ['C1'] }] }
+        { title: 'T1', deliverable: 'Build and deploy app A', doneCriteria: ['Criterion 1'], submitFields: ['link'], estimateHours: 6 },
+        { title: 'T2', deliverable: 'Build and deploy app B', doneCriteria: ['Criterion 1'], submitFields: ['link'], estimateHours: 6 },
+        { title: 'T3', deliverable: 'Build and deploy app C', doneCriteria: ['Criterion 1'], submitFields: ['link'], estimateHours: 6 }
       ]
     };
 
     const results: NDJSONLine[] = [];
     for await (const line of generator.generatePlan(
-      { trackId: 'test', answers: {}, deviceId: 'test', weeks: [0, 1, 2] },
+      { trackId: 'test', answers: { weeklyHours: 10 as const }, deviceId: 'test', weeks: [0, 1, 2] },
       track
     )) {
       results.push(line);
@@ -145,7 +145,7 @@ describe('Contract: Client aborts request', () => {
     
     // Start generation
     const genIterator = generator.generatePlan(
-      { trackId: 'test', answers: {}, deviceId: 'test' },
+      { trackId: 'test', answers: { weeklyHours: 10 as const }, deviceId: 'test' },
       createTestTrack()
     );
 
@@ -200,7 +200,7 @@ describe('Contract: Input validation prevents injection', () => {
     expect(() => {
       validatePlanRequest({
         trackId: 'test',
-        answers: { question: longAnswer },
+        answers: { question: longAnswer, weeklyHours: 10 },
         deviceId: 'test'
       });
     }).toThrow('exceeds maximum length');
@@ -212,7 +212,7 @@ describe('Contract: Input validation prevents injection', () => {
     expect(() => {
       validatePlanRequest({
         trackId: 'test',
-        answers: { question: 123 }, // Not a string
+        answers: { question: 123, weeklyHours: 10 }, // Not a string
         deviceId: 'test'
       });
     }).toThrow('must be a string');

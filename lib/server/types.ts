@@ -1,5 +1,13 @@
-// Week data structure
-export interface WeekData {
+import type { PlanWeekData, WeeklyHours, NDJSONLine as SharedNDJSONLine } from '../shared/plan';
+
+// Week data structure (schema v2) - single source of truth lives in lib/shared/plan.ts
+export type WeekData = PlanWeekData;
+
+/**
+ * Legacy (schema v1) template week shape. Only used for template copy that has
+ * not yet been rewritten to v2; converted via toPlanWeek() before being streamed.
+ */
+export interface LegacyTemplateWeek {
   title: string;
   milestone: string;
   tasks: Task[];
@@ -22,10 +30,9 @@ export interface Resource {
 }
 
 // NDJSON response types
-export type NDJSONLine = 
-  | { type: 'week'; index: number; data: WeekData; source: 'ai' | 'template' }
-  | { type: 'done'; fallbackWeeks: number[] }
-  | { type: 'error'; message: string; fallbackWeeks: number[] };
+export type NDJSONLine = SharedNDJSONLine;
+
+export type TemplateWeek = PlanWeekData | LegacyTemplateWeek;
 
 // Track configuration
 export interface TrackConfig {
@@ -33,13 +40,14 @@ export interface TrackConfig {
   name: string;
   description: string;
   prompt: string;
-  templatePlan: WeekData[];
+  templatePlan: TemplateWeek[];
 }
 
 // API request types
+export type PlanAnswers = { weeklyHours: WeeklyHours } & Record<string, string | number>;
 export interface PlanRequest {
   trackId: string;
-  answers: Record<string, string>;
+  answers: PlanAnswers;
   deviceId: string;
   weeks?: number[];
   keptWeeks?: { index: number; title: string }[];

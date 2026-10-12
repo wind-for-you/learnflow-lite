@@ -28,45 +28,29 @@ export class MockLLMClient {
   }
 }
 
-export function createMockWeekJSON(index: number): string {
-  return JSON.stringify({
+export function createMockWeek(index: number, overrides: Record<string, unknown> = {}) {
+  return {
     index,
     title: `Week ${index + 1} Title`,
-    milestone: `Milestone for week ${index + 1}`,
-    tasks: [
-      {
-        title: `Task for week ${index + 1}`,
-        description: 'Build something concrete',
-        deliverable: 'Build and deploy a working application with features X and Y',
-        acceptanceCriteria: [
-          'Feature X is implemented',
-          'Feature Y works correctly',
-          'Application is deployed online'
-        ],
-        estimatedHours: 8,
-        references: [
-          {
-            title: 'Official Documentation',
-            url: 'https://example.com/docs',
-            type: 'doc'
-          }
-        ]
-      }
-    ],
-    resources: [
-      {
-        title: 'Learning Resource',
-        url: 'https://example.com/learn'
-      }
-    ]
-  });
+    deliverable: 'Build and deploy a working app with features X and Y, submit link',
+    doneCriteria: ['Feature X is implemented', 'App is deployed online'],
+    submitFields: ['link'],
+    estimateHours: 8,
+    ...(index === 0 ? { firstStep: { action: 'Create a GitHub repo', minutes: 15 } } : {}),
+    resources: [{ title: 'Learning Resource', url: 'https://example.com/learn' }],
+    ...overrides,
+  };
+}
+
+export function createMockWeekJSON(index: number, overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify(createMockWeek(index, overrides));
 }
 
 export function createInvalidWeekJSON(index: number): string {
   return JSON.stringify({
     index,
     title: `Week ${index + 1}`,
-    // Missing milestone - will fail validation
-    tasks: []
+    // Missing deliverable - will fail validation
+    doneCriteria: [],
   });
 }
