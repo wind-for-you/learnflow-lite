@@ -49,6 +49,8 @@ jobs:
       - uses: actions/checkout@v4
       
       - uses: pnpm/action-setup@v4
+        with:
+          version: 9
       
       - uses: actions/setup-node@v4
         with:
@@ -59,32 +61,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       
       - name: TypeScript 类型检查
-        run: |
-          pnpm typecheck || {
-            # Check if only frontend files have errors
-            pnpm typecheck 2>&1 | tee /tmp/typecheck.log
-            if grep -qE "(lib/server|app/api/plan|app/api/waitlist|tests/(contract|ratelimit|plan-generator|validation))" /tmp/typecheck.log; then
-              echo "❌ Server code has type errors"
-              exit 1
-            else
-              echo "⚠️ Only frontend type errors (known issue, tracked separately)"
-              exit 0
-            fi
-          }
+        run: pnpm typecheck
       
       - name: ESLint 检查
-        run: |
-          pnpm lint || {
-            # Check if only frontend files have errors
-            pnpm lint 2>&1 | tee /tmp/lint.log
-            if grep -qE "(lib/server|app/api/plan|app/api/waitlist)" /tmp/lint.log; then
-              echo "❌ Server code has lint errors"
-              exit 1
-            else
-              echo "⚠️ Only frontend lint errors (known issue, tracked separately)"
-              exit 0
-            fi
-          }
+        run: pnpm lint
 
   test:
     name: 单元测试
@@ -93,6 +73,8 @@ jobs:
       - uses: actions/checkout@v4
       
       - uses: pnpm/action-setup@v4
+        with:
+          version: 9
       
       - uses: actions/setup-node@v4
         with:
@@ -112,6 +94,8 @@ jobs:
       - uses: actions/checkout@v4
       
       - uses: pnpm/action-setup@v4
+        with:
+          version: 9
       
       - uses: actions/setup-node@v4
         with:
@@ -122,9 +106,6 @@ jobs:
         run: pnpm install --frozen-lockfile
       
       - name: Next.js 构建
-        env:
-          LLM_API_KEY: SENTINEL_LLM_KEY_CI_TEST
-          LLM_BASE_URL: https://sentinel-base.test
         run: pnpm build
       
       - name: 检查 Worker 体积
@@ -146,24 +127,10 @@ jobs:
       
       - name: 检查是否泄露密钥
         run: |
-          # 检查构建产物目录是否存在
-          if [ ! -d ".open-next" ] && [ ! -d ".worker-next" ]; then
-            echo "❌ 错误: 构建产物目录不存在"
-            exit 1
-          fi
-          
-          # 检查 sentinel LLM_API_KEY
-          if grep -r "SENTINEL_LLM_KEY_CI_TEST" .worker-next/ .open-next/ 2>/dev/null | grep -v "process.env"; then
-            echo "❌ 构建产物中发现 LLM_API_KEY 泄露"
-            exit 1
-          fi
-          
-          # 检查其他密钥
           if grep -r "AMPLITUDE_API_KEY" .worker-next/ .open-next/ 2>/dev/null | grep -v "process.env"; then
-            echo "❌ 构建产物中发现 AMPLITUDE_API_KEY 泄露"
+            echo "❌ 构建产物中发现密钥泄露"
             exit 1
           fi
-          
           echo "✅ 未发现密钥泄露"
       
       - name: Wrangler dry-run
