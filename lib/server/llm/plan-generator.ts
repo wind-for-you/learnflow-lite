@@ -157,17 +157,23 @@ export class PlanGenerator {
     let prompt = trackConfig.prompt + '\n\n';
     
     prompt += '## User Answers:\n';
+    prompt += '```\n';  // Delimiter to treat answers as data
     for (const [key, value] of Object.entries(answers)) {
-      prompt += `${key}: ${value}\n`;
+      // Escape any backticks in user input to prevent breaking delimiter
+      const escapedValue = value.replace(/```/g, '\\`\\`\\`');
+      prompt += `${key}: ${escapedValue}\n`;
     }
-    prompt += '\n';
+    prompt += '```\n\n';  // End delimiter
     
     if (keptWeeks && keptWeeks.length > 0) {
       prompt += '## Existing Week Titles (keep consistency):\n';
+      prompt += '```\n';
       for (const week of keptWeeks) {
-        prompt += `Week ${week.index + 1}: ${week.title}\n`;
+        // Escape backticks in user-provided titles
+        const escapedTitle = week.title.replace(/```/g, '\\`\\`\\`');
+        prompt += `Week ${week.index + 1}: ${escapedTitle}\n`;
       }
-      prompt += '\n';
+      prompt += '```\n\n';
     }
     
     prompt += `## Instructions:\n`;

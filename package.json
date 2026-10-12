@@ -5,7 +5,9 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest watch",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "ttft": "tsx scripts/ttft.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.server.json"
   },
   "dependencies": {
     "@cloudflare/workers-types": "^4.20241127.0"
@@ -13,6 +15,7 @@
   "devDependencies": {
     "vitest": "^1.6.0",
     "@vitest/coverage-v8": "^1.6.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "tsx": "^4.7.0"
   }
 }
