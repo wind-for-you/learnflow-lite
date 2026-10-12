@@ -70,7 +70,9 @@ v1 的 `milestone`、`tasks`、`acceptanceCriteria` 等字段**已移除**;`titl
 #### error 行
 `{ "type": "error", "message": "LLM API error: 503", "fallbackWeeks": [2, 3] }`
 
-`source: "template"` 表示该周校验失败,已用模板兜底。
+`source: "template"` 表示该周使用模板兜底(校验失败、缺失,或 LLM 未配置)。
+
+**LLM 未配置**(缺少 `LLM_BASE_URL` 或 `LLM_API_KEY`):不走错误路径,直接流式返回全部模板周(`source: "template"`),以 `{"type":"done","fallbackWeeks":[全部周索引]}` 结束;服务端每个请求记录一次 `{"event":"llm_not_configured"}`。`{"type":"error"}` 仅用于生成过程中的失败(上游错误、超时、中途断流等)。
 
 ### 服务端校验规则(仅服务端执行,超出 zod schema)
 
@@ -90,7 +92,7 @@ v1 的 `milestone`、`tasks`、`acceptanceCriteria` 等字段**已移除**;`titl
 **限制规则:**
 
 - 每个设备每天最多 3 次请求(重新生成也计数)
-- 每个 IP 每天最多 10 次请求
+- 每个 IP 每天最多 30 次请求
 - 日期基于 Asia/Shanghai 时区
 
 **响应头:**
@@ -103,10 +105,13 @@ v1 的 `milestone`、`tasks`、`acceptanceCriteria` 等字段**已移除**;`titl
 ```json
 {
   "error": "Rate limit exceeded",
+  "limit": "device",
   "remaining": 0,
-  "resetAt": "2026-10-13T00:00:00.000Z"
+  "resetAt": "2026-10-12T16:00:00.000Z"
 }
 ```
+
+body 由 `lib/shared/plan.ts` 中的 zod schema `RateLimitError` 定义:`error: string`、`limit: "device" | "ip"`(哪个配额触发)、`remaining: number`、`resetAt: string`(ISO 8601,下一个 Asia/Shanghai 00:00)。被拒绝的请求同样计入计数。服务端日志:`{"event":"rate_limited","limit":"ip","resetAt":"...","count":31}`
 
 **状态码:** `429 Too Many Requests`
 
@@ -234,7 +239,7 @@ v1 的 `milestone`、`tasks`、`acceptanceCriteria` 等字段**已移除**;`titl
 
 - `LLM_MODEL`: LLM 模型名称(默认: `qwen-plus`)
 - `RATE_LIMIT_PER_DEVICE_PER_DAY`: 每设备每天请求限制(默认: `3`)
-- `RATE_LIMIT_PER_IP_PER_DAY`: 每 IP 每天请求限制(默认: `10`)
+- `RATE_LIMIT_PER_IP_PER_DAY`: 每 IP 每天请求限制(默认: `30`)
 
 ### Cloudflare Bindings
 

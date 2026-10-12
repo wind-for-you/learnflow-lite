@@ -1,4 +1,4 @@
-import type { PlanWeekData, WeeklyHours, NDJSONLine as SharedNDJSONLine } from '../shared/plan';
+import type { RateLimitKind, PlanWeekData, WeeklyHours, NDJSONLine as SharedNDJSONLine } from '../shared/plan';
 
 // Week data structure (schema v2) - single source of truth lives in lib/shared/plan.ts
 export type WeekData = PlanWeekData;
@@ -38,6 +38,8 @@ export interface WaitlistRequest {
 // Rate limit result
 export interface RateLimitResult {
   allowed: boolean;
+  /** Which quota rejected the request (only when allowed=false) */
+  limit?: RateLimitKind;
   remaining: number;
   resetAt: string;
   count?: number;

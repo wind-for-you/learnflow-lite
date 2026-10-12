@@ -76,7 +76,7 @@ database_id = "your-database-id-here"  # 替换为实际的 database_id
 [vars]
 LLM_MODEL = "qwen-plus"
 RATE_LIMIT_PER_DEVICE_PER_DAY = "3"
-RATE_LIMIT_PER_IP_PER_DAY = "10"
+RATE_LIMIT_PER_IP_PER_DAY = "30"
 ```
 
 ## 环境变量和 Secrets
@@ -101,7 +101,7 @@ wrangler secret put LLM_API_KEY
 
 - `LLM_MODEL`: LLM 模型名称,默认 `qwen-plus`
 - `RATE_LIMIT_PER_DEVICE_PER_DAY`: 每设备每天请求限制,默认 `3`
-- `RATE_LIMIT_PER_IP_PER_DAY`: 每 IP 每天请求限制,默认 `10`
+- `RATE_LIMIT_PER_IP_PER_DAY`: 每 IP 每天请求限制,默认 `30`
 
 ## LLM 提供商配置
 

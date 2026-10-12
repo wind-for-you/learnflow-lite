@@ -155,6 +155,7 @@ describe('checkRateLimit', () => {
     // Third device, same IP - should be blocked by IP limit
     const result = await checkRateLimit(mockDb, 'device-3', '192.168.1.1', mockEnv);
     expect(result.allowed).toBe(false);
+    expect(result.limit).toBe('ip');
     expect(result.remaining).toBe(0);
   });
 
@@ -202,3 +203,25 @@ describe('checkRateLimit', () => {
     expect(resetDate.toISOString()).toBe(result.resetAt);
   });
 });
+
+describe('rate limit defaults', () => {
+  it('defaults to device=3, ip=30 when env vars are unset', async () => {
+    const counts = new Map<string, number>();
+    const db = {
+      prepare: () => ({ bind: (key: string) => ({ key }) }),
+      batch: async (stmts: { key: string }[]) =>
+        stmts.map(({ key }) => {
+          counts.set(key, (counts.get(key) ?? 0) + 1);
+          return { results: [{ count: counts.get(key) }] };
+        }),
+    } as unknown as D1Database;
+    const env = {} as Env;
+    for (let i = 0; i < 3; i++) expect((await checkRateLimit(db, 'dev', '1.1.1.1', env)).allowed).toBe(true);
+    const dev = await checkRateLimit(db, 'dev', '1.1.1.1', env);
+    expect(dev).toMatchObject({ allowed: false, limit: 'device' });
+    // 4 IP hits so far; IP allows 30
+    for (let i = 5; i <= 30; i++) expect((await checkRateLimit(db, `d${i}`, '1.1.1.1', env)).allowed).toBe(true);
+    expect(await checkRateLimit(db, 'd31', '1.1.1.1', env)).toMatchObject({ allowed: false, limit: 'ip' });
+  });
+});
+

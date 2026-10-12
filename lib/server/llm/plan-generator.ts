@@ -30,6 +30,16 @@ export class PlanGenerator {
     const weeksToGenerate = weeks ? weeks.filter(i => i < totalWeeks) : Array.from({ length: totalWeeks }, (_, i) => i);
     const generatedWeeks = new Set<number>();
 
+    // No LLM configured: not an error - stream the template plan and finish normally
+    if ((this.client as { isConfigured?: boolean }).isConfigured === false) {
+      console.warn(JSON.stringify({ event: 'llm_not_configured', model: this.modelName, weeks: weeksToGenerate.length }));
+      for (const index of weeksToGenerate) {
+        yield { type: 'week', index, data: templatePlan[index], source: 'template' };
+      }
+      yield { type: 'done', fallbackWeeks: weeksToGenerate };
+      return;
+    }
+
     // Build the prompt
     const prompt = this.buildPrompt(trackConfig, answers, weeksToGenerate, keptWeeks, totalWeeks, weeklyHours);
     

@@ -52,7 +52,7 @@ database_id = "YOUR_DATABASE_ID_HERE"
 [vars]
 LLM_MODEL = "qwen-plus"
 RATE_LIMIT_PER_DEVICE_PER_DAY = "3"
-RATE_LIMIT_PER_IP_PER_DAY = "10"
+RATE_LIMIT_PER_IP_PER_DAY = "30"
 ```
 
 ## Secrets

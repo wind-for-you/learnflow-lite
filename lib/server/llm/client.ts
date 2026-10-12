@@ -19,6 +19,11 @@ export class LLMClient {
   private apiKey: string;
   private model: string;
 
+  /** False when LLM_BASE_URL or LLM_API_KEY is missing. */
+  get isConfigured(): boolean {
+    return Boolean(this.baseURL && this.apiKey);
+  }
+
   get modelName(): string {
     return this.model;
   }

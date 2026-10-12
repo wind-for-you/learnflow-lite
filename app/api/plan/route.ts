@@ -1,4 +1,5 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
+import { RateLimitError } from '../../../lib/shared/plan';
 import type { Env, NDJSONLine } from '../../../lib/server/types';
 import { validatePlanRequest, ValidationError } from '../../../lib/server/validation';
 import { checkRateLimit } from '../../../lib/server/ratelimit';
@@ -36,12 +37,15 @@ export async function POST(request: Request) {
     );
 
     if (!rateLimit.allowed) {
+      const body: RateLimitError = RateLimitError.parse({
+        error: 'Rate limit exceeded',
+        limit: rateLimit.limit ?? 'device',
+        remaining: 0,
+        resetAt: rateLimit.resetAt,
+      });
+      console.warn(JSON.stringify({ event: 'rate_limited', limit: body.limit, resetAt: body.resetAt, count: rateLimit.count }));
       return new Response(
-        JSON.stringify({
-          error: 'Rate limit exceeded',
-          remaining: 0,
-          resetAt: rateLimit.resetAt
-        }),
+        JSON.stringify(body),
         { 
           status: 429,
           headers: { 

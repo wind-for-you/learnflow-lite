@@ -1,7 +1,7 @@
 import type { Env, RateLimitResult } from '../types';
 
 const DEFAULT_DEVICE_LIMIT = 3;
-const DEFAULT_IP_LIMIT = 10;
+const DEFAULT_IP_LIMIT = 30;
 
 function parseLimit(value: string | undefined, defaultValue: number): number {
   if (!value) return defaultValue;
@@ -55,6 +55,7 @@ export async function checkRateLimit(
   if (newDeviceCount > deviceLimit) {
     return {
       allowed: false,
+      limit: 'device',
       remaining: 0,
       resetAt,
       count: newDeviceCount
@@ -64,6 +65,7 @@ export async function checkRateLimit(
   if (newIpCount > ipLimit) {
     return {
       allowed: false,
+      limit: 'ip',
       remaining: 0,
       resetAt,
       count: newIpCount
