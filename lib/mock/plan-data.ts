@@ -1,165 +1,160 @@
-export interface WeekPlan {
-  title: string;
-  milestone: string;
-  topics: string[];
-  resources: string[];
-  practiceHours: number;
+import type { NDJSONLine, PlanWeekData } from '@/lib/shared/plan';
+
+export type { NDJSONLine, PlanWeekData } from '@/lib/shared/plan';
+
+/** 一行流式消息（与服务端 NDJSON 契约一致）。 */
+export type PlanMessage = NDJSONLine;
+
+export interface PlanStreamRequest {
+  trackId: string;
+  answers: Record<string, string | number>;
+  deviceId?: string;
+  /** 需要（重新）生成的周索引。 */
+  weeks?: number[];
+  /** 保留不动的周。 */
+  keptWeeks?: Array<{ index: number; title: string }>;
 }
 
-export interface WeekMessage {
-  type: 'week';
-  index: number;
-  data: WeekPlan;
-  source: 'ai' | 'template';
-}
-
-export interface DoneMessage {
-  type: 'done';
-  fallbackWeeks?: number;
-}
-
-export interface ErrorMessage {
-  type: 'error';
-  message: string;
-  fallbackWeeks?: number;
-}
-
-export type PlanMessage = WeekMessage | DoneMessage | ErrorMessage;
-
-export const mockWeeks: WeekPlan[] = [
+/** 前端模板周：AI 不可用时兜底，字段符合 PlanWeekData。 */
+export const templateWeeks: PlanWeekData[] = [
   {
-    title: '编程基础与环境搭建',
-    milestone: '完成开发环境配置，掌握基本语法',
-    topics: ['VS Code 配置', 'Git 基础', 'HTML/CSS 入门', 'JavaScript 变量与函数'],
-    resources: ['MDN Web Docs', 'freeCodeCamp', 'Git 官方教程'],
-    practiceHours: 10,
+    title: '开发环境与第一个网页',
+    deliverable: '在 GitHub Pages 上线一个个人介绍单页并提交访问链接',
+    doneCriteria: ['页面可公开访问', '包含自我介绍与联系方式'],
+    submitFields: ['link'],
+    estimateHours: 6,
+    firstStep: { action: '注册 GitHub 账号并新建一个仓库', minutes: 15 },
+    resources: [{ title: 'MDN 学习 HTML', url: 'https://developer.mozilla.org/zh-CN/docs/Learn/HTML' }],
   },
   {
-    title: 'JavaScript 核心概念',
-    milestone: '理解异步编程、闭包、原型链',
-    topics: ['Promise 与 async/await', '闭包与作用域', 'this 绑定', '原型继承'],
-    resources: ['JavaScript.info', "You Don't Know JS"],
-    practiceHours: 12,
+    title: 'JavaScript 基础练习',
+    deliverable: '完成 20 道 JavaScript 基础练习题并把代码推送到仓库',
+    doneCriteria: ['20 道题全部通过', '代码已推送到 GitHub'],
+    submitFields: ['link', 'number'],
+    estimateHours: 8,
+    resources: [{ title: 'JavaScript.info', url: 'https://zh.javascript.info/' }],
   },
   {
-    title: 'React 基础',
-    milestone: '能独立开发简单组件',
-    topics: ['组件与 Props', 'State 与生命周期', 'Hooks 入门', '事件处理'],
-    resources: ['React 官方文档', 'React 速成课程'],
-    practiceHours: 15,
+    title: '交互式待办清单',
+    deliverable: '用原生 JS 做一个可增删、可标记完成的待办清单页面',
+    doneCriteria: ['能新增和删除条目', '刷新后数据仍保留'],
+    submitFields: ['link'],
+    estimateHours: 8,
   },
   {
-    title: 'React 进阶与状态管理',
-    milestone: '掌握复杂状态管理',
-    topics: ['useContext + useReducer', '自定义 Hooks', '性能优化', 'React Router'],
-    resources: ['React 官方文档进阶', 'Kent C. Dodds 博客'],
-    practiceHours: 12,
+    title: 'React 组件入门',
+    deliverable: '用 React 重写待办清单，拆出至少 3 个组件并部署上线',
+    doneCriteria: ['至少 3 个组件', '线上可访问'],
+    submitFields: ['link', 'text'],
+    estimateHours: 10,
+    resources: [{ title: 'React 官方文档', url: 'https://react.dev/learn' }],
   },
   {
-    title: 'TypeScript 基础',
-    milestone: '为项目添加类型安全',
-    topics: ['基础类型', '接口与类型别名', '泛型', 'TypeScript 配置'],
-    resources: ['TypeScript 官方手册', 'TypeScript Deep Dive'],
-    practiceHours: 10,
+    title: '调用公开 API',
+    deliverable: '做一个调用天气公开 API 的查询页面，含加载与错误状态',
+    doneCriteria: ['展示加载中状态', '接口失败时有提示'],
+    submitFields: ['link'],
+    estimateHours: 8,
   },
   {
-    title: 'Next.js 与全栈开发',
-    milestone: '完成第一个全栈项目',
-    topics: ['App Router', 'Server Components', 'API Routes', '数据获取'],
-    resources: ['Next.js 官方文档', 'Vercel 教程'],
-    practiceHours: 15,
+    title: 'TypeScript 改造',
+    deliverable: '把天气查询项目改写为 TypeScript 且 tsc 无报错',
+    doneCriteria: ['开启 strict 模式', 'tsc 检查零错误'],
+    submitFields: ['link', 'text'],
+    estimateHours: 8,
+    resources: [{ title: 'TypeScript 手册', url: 'https://www.typescriptlang.org/docs/' }],
   },
   {
-    title: 'CSS 框架与样式工程',
-    milestone: '掌握现代样式方案',
-    topics: ['Tailwind CSS', 'CSS Modules', '响应式设计', '暗色模式'],
-    resources: ['Tailwind 官方文档', 'CSS Tricks'],
-    practiceHours: 8,
+    title: '样式与响应式',
+    deliverable: '用 Tailwind 为项目做手机与桌面两套响应式布局并截图提交',
+    doneCriteria: ['375px 下无横向滚动', '桌面端布局合理'],
+    submitFields: ['link', 'text'],
+    estimateHours: 6,
   },
   {
-    title: '数据库与后端基础',
-    milestone: '理解前后端交互',
-    topics: ['SQL 基础', 'RESTful API', 'Prisma ORM', '身份验证'],
-    resources: ['PostgreSQL 教程', 'Prisma 文档'],
-    practiceHours: 12,
+    title: 'Next.js 全栈小项目',
+    deliverable: '用 Next.js 做一个带 API 路由的留言板并部署上线',
+    doneCriteria: ['可以提交和查看留言', '线上可访问'],
+    submitFields: ['link'],
+    estimateHours: 10,
   },
   {
-    title: '实战项目一：Todo 应用',
-    milestone: '完成增删改查功能',
-    topics: ['需求分析', '数据库设计', 'CRUD 实现', '部署上线'],
-    resources: ['GitHub 优秀项目', 'Vercel 部署文档'],
-    practiceHours: 20,
+    title: '测试与 CI',
+    deliverable: '为留言板补 5 个单元测试并配置 GitHub Actions 自动运行',
+    doneCriteria: ['至少 5 个测试通过', 'CI 显示绿色'],
+    submitFields: ['link', 'number'],
+    estimateHours: 8,
   },
   {
-    title: '实战项目二：个人博客',
-    milestone: '构建完整内容管理系统',
-    topics: ['Markdown 渲染', '标签分类', '搜索功能', 'SEO 优化'],
-    resources: ['Next.js 博客教程', 'MDX 文档'],
-    practiceHours: 20,
+    title: '作品集网站',
+    deliverable: '搭建个人作品集网站，展示前面完成的 3 个项目',
+    doneCriteria: ['包含 3 个项目介绍', '每个项目有在线链接'],
+    submitFields: ['link'],
+    estimateHours: 10,
   },
   {
-    title: '测试与工程化',
-    milestone: '建立质量保障体系',
-    topics: ['Jest 单元测试', 'React Testing Library', 'E2E 测试', 'CI/CD'],
-    resources: ['Testing Library 文档', 'GitHub Actions 教程'],
-    practiceHours: 10,
+    title: '简历与投递',
+    deliverable: '写好一页技术简历并投递 10 个前端岗位',
+    doneCriteria: ['简历一页以内', '投递数量达到 10 个'],
+    submitFields: ['text', 'number'],
+    estimateHours: 6,
   },
   {
-    title: '性能优化与最佳实践',
-    milestone: '提升应用性能',
-    topics: ['Bundle 分析', '懒加载', '缓存策略', 'Web Vitals'],
-    resources: ['web.dev', 'Chrome DevTools 文档'],
-    practiceHours: 8,
+    title: '面试复盘',
+    deliverable: '整理 30 道常见前端面试题的答案并写一篇复盘笔记',
+    doneCriteria: ['30 道题都有答案', '复盘笔记已发布'],
+    submitFields: ['link', 'text'],
+    estimateHours: 8,
   },
 ];
 
+export function getWeeklyHours(answers: Record<string, string | number>): number {
+  const raw = Number(answers.weeklyHours);
+  return Number.isFinite(raw) && raw > 0 ? raw : 10;
+}
+
+export function getTotalWeeks(answers: Record<string, string | number>): number {
+  return Math.min(Math.max(Math.ceil(120 / getWeeklyHours(answers)), 6), 12);
+}
+
+/** 返回第 index 周的模板数据（投入时间不超过每周可用小时）。 */
+export function getTemplateWeek(index: number, weeklyHours: number): PlanWeekData {
+  const base = templateWeeks[index % templateWeeks.length];
+  return { ...base, estimateHours: Math.max(1, Math.min(base.estimateHours, weeklyHours)) };
+}
+
+export type MockScenario = 'ok' | 'fail' | 'truncate';
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export function generateMockPlanStream(
-  requestBody: {
-    trackId: string;
-    answers: Record<string, string>;
-    weeks?: string[];
-    keptWeeks?: string[];
-  },
-  shouldFail = false,
-  shouldTimeout = false
+  request: PlanStreamRequest,
+  scenario: MockScenario = 'ok',
+  stepMs = 300
 ): AsyncGenerator<PlanMessage, void, unknown> {
   return (async function* () {
-    if (shouldFail) {
-      yield {
-        type: 'error',
-        message: '生成失败，使用模板计划',
-        fallbackWeeks: 12,
-      } as ErrorMessage;
+    const weeklyHours = getWeeklyHours(request.answers);
+    const total = getTotalWeeks(request.answers);
+    const indices = request.weeks ?? Array.from({ length: total }, (_, i) => i);
+    const isRegenerate = request.weeks !== undefined;
+
+    if (scenario === 'fail') {
+      yield { type: 'error', message: '生成失败，先用模板计划开始', fallbackWeeks: indices };
       return;
     }
 
-    const weeklyHours = parseInt(requestBody.answers.weekly_hours || '10');
-    const totalWeeks = Math.min(Math.max(Math.ceil(120 / weeklyHours), 8), 16);
-
-    const startIndex = requestBody.keptWeeks?.length || 0;
-    const weeksToGenerate = requestBody.weeks?.length || totalWeeks - startIndex;
-
-    for (let i = 0; i < weeksToGenerate; i++) {
-      if (shouldTimeout && i >= 3) {
-        return;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 200 + Math.random() * 300));
-
-      const weekData = mockWeeks[i % mockWeeks.length];
-      const isTemplate = i >= 6;
-
-      yield {
-        type: 'week',
-        index: startIndex + i,
-        data: weekData,
-        source: isTemplate ? 'template' : 'ai',
-      } as WeekMessage;
+    for (let i = 0; i < indices.length; i++) {
+      if (scenario === 'truncate' && i >= 3) return;
+      await delay(stepMs);
+      const index = indices[i];
+      // 初次生成时第 7 周起模拟 AI 校验失败 → 模板兜底；重新生成时全部由 AI 返回。
+      const source = !isRegenerate && index >= 6 ? 'template' : 'ai';
+      yield { type: 'week', index, source, data: getTemplateWeek(index, weeklyHours) };
     }
 
     yield {
       type: 'done',
-      fallbackWeeks: shouldTimeout ? totalWeeks - 3 : undefined,
-    } as DoneMessage;
+      fallbackWeeks: isRegenerate ? [] : indices.filter((index) => index >= 6),
+    };
   })();
 }

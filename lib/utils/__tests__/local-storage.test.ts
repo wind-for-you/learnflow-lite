@@ -5,89 +5,79 @@ import {
   saveCheckin,
   getCheckins,
   getCheckinForWeek,
+  savePlan,
+  loadPlan,
   type GoalData,
   type CheckinData,
+  type StoredWeek,
 } from '../local-storage';
+import { getTemplateWeek } from '@/lib/mock/plan-data';
+
+const week = (index: number): StoredWeek => ({ ...getTemplateWeek(index, 10), index, source: 'ai' });
 
 describe('localStorage utils', () => {
   beforeEach(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.clear();
-    }
+    localStorage.clear();
   });
 
-  describe('Goal management', () => {
-    it('应该保存和获取目标数据', () => {
-      const goalData: GoalData = {
-        goalId: 'test-goal-1',
+  describe('Goal', () => {
+    it('保存和读取目标，weeklyHours 为数字', () => {
+      const goal: GoalData = {
+        goalId: 'g1',
         trackId: 'tech-self-taught',
-        answers: { target_role: '前端工程师' },
-        createdAt: Date.now(),
+        answers: { targetRole: '前端工程师', weeklyHours: 10 },
+        createdAt: 1,
       };
-
-      saveGoal(goalData);
-      const retrieved = getGoal();
-
-      expect(retrieved).toEqual(goalData);
+      saveGoal(goal);
+      expect(getGoal()).toEqual(goal);
+      expect(typeof getGoal()?.answers.weeklyHours).toBe('number');
     });
 
-    it('当无数据时应该返回 null', () => {
+    it('无数据时返回 null', () => {
       expect(getGoal()).toBeNull();
     });
   });
 
-  describe('Checkin management', () => {
-    it('应该保存和获取打卡记录', () => {
-      const checkin: CheckinData = {
-        weekIndex: 0,
-        summary: '完成了第一周学习',
-        link: 'https://github.com/test',
-        hoursSpent: 10,
-        timestamp: Date.now(),
-      };
-
-      saveCheckin(checkin);
-      const checkins = getCheckins();
-
-      expect(checkins).toHaveLength(1);
-      expect(checkins[0]).toEqual(checkin);
+  describe('Plan (schemaVersion 2)', () => {
+    it('保存后可读取并通过校验', () => {
+      savePlan('g1', [week(0), week(1)]);
+      const result = loadPlan('g1');
+      expect(result.status).toBe('ok');
+      if (result.status === 'ok') {
+        expect(result.plan.schemaVersion).toBe(2);
+        expect(result.plan.weeks).toHaveLength(2);
+      }
     });
 
-    it('应该支持多条打卡记录', () => {
-      const checkin1: CheckinData = {
-        weekIndex: 0,
-        summary: 'Week 1',
-        link: '',
-        hoursSpent: 10,
-        timestamp: Date.now(),
-      };
-      const checkin2: CheckinData = {
-        weekIndex: 1,
-        summary: 'Week 2',
-        link: '',
-        hoursSpent: 12,
-        timestamp: Date.now(),
-      };
+    it('旧版本（v1 字段）数据判定为 outdated', () => {
+      localStorage.setItem(
+        'learnflow_plan',
+        JSON.stringify({ goalId: 'g1', weeks: [{ title: 'x', milestone: 'y', topics: [] }] })
+      );
+      expect(loadPlan('g1').status).toBe('outdated');
+    });
 
-      saveCheckin(checkin1);
-      saveCheckin(checkin2);
+    it('损坏 JSON 判定为 outdated', () => {
+      localStorage.setItem('learnflow_plan', '{oops');
+      expect(loadPlan('g1').status).toBe('outdated');
+    });
 
+    it('goalId 不匹配视为空', () => {
+      savePlan('g1', [week(0)]);
+      expect(loadPlan('g2').status).toBe('empty');
+    });
+  });
+
+  describe('Checkin', () => {
+    it('保存、覆盖同周、按周查找', () => {
+      const c1: CheckinData = { weekIndex: 0, values: { link: 'https://a.dev' }, timestamp: 1 };
+      const c2: CheckinData = { weekIndex: 0, values: { link: 'https://b.dev' }, timestamp: 2 };
+      const c3: CheckinData = { weekIndex: 5, values: { number: '8' }, timestamp: 3 };
+      saveCheckin(c1);
+      saveCheckin(c2);
+      saveCheckin(c3);
       expect(getCheckins()).toHaveLength(2);
-    });
-
-    it('应该根据周数查找打卡记录', () => {
-      const checkin: CheckinData = {
-        weekIndex: 5,
-        summary: 'Week 5 done',
-        link: '',
-        hoursSpent: 15,
-        timestamp: Date.now(),
-      };
-
-      saveCheckin(checkin);
-      const found = getCheckinForWeek(5);
-
-      expect(found).toEqual(checkin);
+      expect(getCheckinForWeek(0)).toEqual(c2);
       expect(getCheckinForWeek(3)).toBeUndefined();
     });
   });
