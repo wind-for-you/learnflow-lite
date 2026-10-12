@@ -1,0 +1,14 @@
+name = "learnflow-lite"
+compatibility_date = "2025-01-10"
+compatibility_flags = ["nodejs_compat"]
+
+main = ".open-next/server-functions/default/index.mjs"
+assets = { directory = ".open-next/assets", binding = "ASSETS" }
+
+[[d1_databases]]
+binding = "DB"
+database_name = "learnflow_lite"
+database_id = "placeholder-will-be-set-in-production"
+
+[vars]
+NEXT_PUBLIC_USE_MOCK = "false"

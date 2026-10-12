@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  check-forbidden-files:
+    name: 检查禁止提交的文件
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: 检查 node_modules
+        run: |
+          if git ls-files | grep -E '^node_modules/'; then
+            echo "❌ 错误: node_modules/ 被跟踪，请从 Git 历史中删除"
+            exit 1
+          fi
+      
+      - name: 检查构建产物
+        run: |
+          FORBIDDEN_PATTERNS=(
+            '\.next/'
+            '\.open-next/'
+            '\.wrangler/'
+            '\.worker-next/'
+            'coverage/'
+            '\.dev\.vars'
+            '^\.env$'
+            '^\.env\.local$'
+          )
+          
+          for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
+            if git ls-files | grep -E "$pattern"; then
+              echo "❌ 错误: 匹配 $pattern 的文件被跟踪，请从 Git 历史中删除"
+              exit 1
+            fi
+          done
+          
+          echo "✅ 未发现禁止提交的文件"
+
+  typecheck-and-lint:
+    name: 类型检查与 Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+      
+      - name: TypeScript 类型检查
+        run: pnpm typecheck
+      
+      - name: ESLint 检查
+        run: pnpm lint
+
+  test:
+    name: 单元测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+      
+      - name: 运行测试
+        run: pnpm test
+
+  build:
+    name: 构建检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+      
+      - name: Next.js 构建
+        run: pnpm build
+      
+      - name: 检查 Worker 体积
+        run: |
+          if [ -f .worker-next/index.mjs ]; then
+            SIZE=$(stat -f%z .worker-next/index.mjs 2>/dev/null || stat -c%s .worker-next/index.mjs)
+            MAX_SIZE=$((3 * 1024 * 1024))
+            THRESHOLD=$((MAX_SIZE * 70 / 100))
+            
+            echo "Worker 体积: $(($SIZE / 1024)) KB"
+            echo "阈值 (3MB 的 70%): $(($THRESHOLD / 1024)) KB"
+            
+            if [ $SIZE -gt $THRESHOLD ]; then
+              echo "❌ Worker 体积超过阈值"
+              exit 1
+            fi
+            echo "✅ Worker 体积在限制内"
+          fi
+      
+      - name: 检查是否泄露密钥
+        run: |
+          if grep -r "AMPLITUDE_API_KEY" .worker-next/ .open-next/ 2>/dev/null | grep -v "process.env"; then
+            echo "❌ 构建产物中发现密钥泄露"
+            exit 1
+          fi
+          echo "✅ 未发现密钥泄露"
+      
+      - name: Wrangler dry-run
+        run: pnpm deploy:dry
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
