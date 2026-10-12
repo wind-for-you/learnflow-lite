@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+.nyc_output/
+
+# Next.js
+.next/
+out/
+.worker-next/
+
+# OpenNext & Cloudflare
+.open-next/
+.wrangler/
+.mf/
+.dev.vars
+
+# Production
+build/
+dist/
+
+# Misc
+.DS_Store
+*.pem
+.idea/
+.vscode/
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Local env files (keep .env.example)
+.env
+.env.local
+.env*.local
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
