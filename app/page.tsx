@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { DemoCards } from '@/components/demo-cards';
+import { SampleWeekCard } from '@/components/sample-week-card';
 
 export default function HomePage() {
   return (
@@ -17,11 +17,12 @@ export default function HomePage() {
             </h1>
             
             <p className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto animate-slide-up text-balance">
-              告别迷茫和拖延，让 AI 为你定制个性化学习计划，
-              <span className="font-medium text-gray-900">2 分钟开始你的转行之路</span>
+              回答 5 个问题，得到按周拆分的转行计划：
+              <span className="font-medium text-gray-900">每周一个可交付的作品、2–3 条完成标准和预计小时数</span>，
+              做完提交链接打卡。
             </p>
             
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-scale-in">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center sm:items-start animate-scale-in">
               <Link
                 href="/onboarding"
                 className="inline-flex items-center justify-center h-12 px-8 rounded-lg bg-primary-600 text-white font-medium hover:bg-primary-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
@@ -32,21 +33,25 @@ export default function HomePage() {
                 </svg>
               </Link>
               
-              <a
-                href="#demo"
-                className="inline-flex items-center justify-center h-12 px-8 rounded-lg border border-gray-300 bg-white font-medium hover:bg-gray-50 transition-colors"
-              >
-                查看演示
-              </a>
+              <div className="flex flex-col items-center gap-1 sm:items-start">
+                <a
+                  href="#demo"
+                  className="inline-flex items-center justify-center h-12 px-8 rounded-lg border border-gray-300 bg-white font-medium hover:bg-gray-50 transition-colors"
+                >
+                  查看演示
+                </a>
+                <span className="text-sm text-gray-600">先看一周计划长什么样，无需注册</span>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section id="demo" className="py-16 px-4 sm:px-6">
+      <section id="demo" className="scroll-mt-4 py-12 px-4 sm:px-6 sm:py-16">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-12">它能为你做什么？</h2>
-          <DemoCards />
+          <h2 className="text-2xl sm:text-3xl font-bold text-center mb-3">生成的计划长这样</h2>
+          <p className="text-center text-gray-600 mb-8">每一周都能检查是否完成，而不是一串“学习主题”。</p>
+          <SampleWeekCard />
         </div>
       </section>
 
