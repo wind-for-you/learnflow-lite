@@ -78,8 +78,11 @@ test.describe('完整用户流程', () => {
     await expect(page.locator('text=第 1 周')).toBeVisible({ timeout: 5000 });
   });
 
-  test('prefers-reduced-motion 下动画被禁用', async ({ page, context }) => {
-    await context.emulateMedia({ reducedMotion: 'reduce' });
+  test('prefers-reduced-motion 下动画被禁用', async ({ browser }) => {
+    const context = await browser.newContext({
+      reducedMotion: 'reduce',
+    });
+    const page = await context.newPage();
     
     await page.goto('/');
     await page.waitForLoadState('networkidle');
@@ -104,5 +107,7 @@ test.describe('完整用户流程', () => {
     
     // 动画应该被抑制（< 0.1秒）
     expect(maxDuration).toBeLessThan(0.1);
+    
+    await context.close();
   });
 });

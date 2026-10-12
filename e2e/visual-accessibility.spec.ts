@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import * as fs from 'fs';
-import * as path from 'path';
 
 test.describe('视觉与可访问性测试', () => {
   const viewports = [
