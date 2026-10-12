@@ -1,0 +1,21 @@
+# Server-specific gitignore entries
+# Append these to the main .gitignore if not already present
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Wrangler local development
+.wrangler/
+wrangler.toml.local
+
+# D1 local database
+.mf/
+
+# Environment variables (if using .env files locally)
+.env
+.env.local
+.env.*.local
+
+# Test artifacts
+*.log
