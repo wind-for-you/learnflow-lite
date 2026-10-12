@@ -61,6 +61,7 @@ test.describe('完整用户流程', () => {
     await expect(next).toContainText('完成 20 道 JavaScript 基础练习题');
     await expect(next).toContainText('预计投入：8 小时');
     const back = page.getByRole('link', { name: '返回学习计划' });
+    await expect(back).toBeInViewport();
     await expect(back).toHaveAttribute('href', /\/plan\?goalId=goal_\d+/);
     await back.click();
     await expect(page).toHaveURL(/\/plan\?goalId=goal_\d+/);

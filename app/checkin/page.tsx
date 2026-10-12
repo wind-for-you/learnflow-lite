@@ -115,12 +115,14 @@ function CheckinPageContent() {
           <p className="mb-6 text-gray-600">{title ? `${title} · ` : ''}记录你的学习成果，保持学习节奏 🎯</p>
 
           {submitted ? (
-            <div className="py-12 text-center" role="status">
-              <div className="mb-4 text-6xl">🎉</div>
-              <h2 className="mb-2 text-2xl font-bold text-success-600">打卡成功！</h2>
-              <p className="text-gray-600">继续保持，你做得很棒！</p>
+            <div className="py-2 text-center" role="status">
+              <h2 className="text-2xl font-bold text-success-600">🎉 打卡成功！</h2>
+              <p className="mt-1 text-gray-600">继续保持，你做得很棒！</p>
+              <LinkButton href={planHref} className="mt-4 w-full sm:w-auto">
+                返回学习计划
+              </LinkButton>
               {nextWeek ? (
-                <div data-testid="next-week" className="mx-auto mt-6 max-w-md rounded-lg border border-gray-200 bg-gray-50 p-4 text-left">
+                <div data-testid="next-week" className="mx-auto mt-4 max-w-md rounded-lg border border-gray-200 bg-gray-50 p-4 text-left">
                   <p className="text-sm font-semibold text-gray-900">下周（第 {weekIndex + 2} 周）：{nextWeek.title}</p>
                   <p className="mt-2 text-sm text-gray-700">
                     <span className="font-semibold">📦 产出：</span>
@@ -129,11 +131,8 @@ function CheckinPageContent() {
                   <p className="mt-1 text-sm text-gray-600">⏱️ 预计投入：{nextWeek.estimateHours} 小时</p>
                 </div>
               ) : (
-                <p className="mt-6 text-sm text-gray-600">这是计划的最后一周 🎓</p>
+                <p className="mt-4 text-sm text-gray-600">这是计划的最后一周 🎓</p>
               )}
-              <LinkButton href={planHref} className="mt-6">
-                返回学习计划
-              </LinkButton>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
