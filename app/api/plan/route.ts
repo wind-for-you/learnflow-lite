@@ -1,3 +1,4 @@
+import { getCloudflareContext } from '@opennextjs/cloudflare';
 import type { Env, NDJSONLine } from '../../../lib/server/types';
 import { validatePlanRequest, ValidationError } from '../../../lib/server/validation';
 import { checkRateLimit } from '../../../lib/server/ratelimit';
@@ -5,10 +6,9 @@ import { getTrackConfig } from '../../../config/tracks/server';
 import { LLMClient } from '../../../lib/server/llm/client';
 import { PlanGenerator } from '../../../lib/server/llm/plan-generator';
 
-export const runtime = 'edge';
-
-export async function POST(request: Request, { env }: { env: Env }) {
+export async function POST(request: Request) {
   try {
+    const env: Env = getCloudflareContext().env;
     // Parse request body
     const body = await request.json();
     const validatedRequest = validatePlanRequest(body);

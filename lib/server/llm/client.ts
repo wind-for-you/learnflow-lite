@@ -27,16 +27,16 @@ export class LLMClient {
     this.baseURL = env.LLM_BASE_URL;
     this.apiKey = env.LLM_API_KEY;
     this.model = env.LLM_MODEL || 'qwen-plus';
-
-    if (!this.baseURL || !this.apiKey) {
-      throw new Error('LLM_BASE_URL and LLM_API_KEY must be configured');
-    }
   }
 
   async *streamChatCompletion(
     messages: ChatMessage[],
     signal?: AbortSignal
   ): AsyncGenerator<string, void, unknown> {
+    // Checked lazily so a missing key degrades to template fallback instead of a 500
+    if (!this.baseURL || !this.apiKey) {
+      throw new Error('LLM_BASE_URL and LLM_API_KEY must be configured');
+    }
     const url = `${this.baseURL}/chat/completions`;
     
     const response = await fetch(url, {

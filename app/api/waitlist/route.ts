@@ -1,7 +1,6 @@
+import { getCloudflareContext } from '@opennextjs/cloudflare';
 import type { Env } from '../../../lib/server/types';
 import { validateWaitlistRequest, ValidationError } from '../../../lib/server/validation';
-
-export const runtime = 'edge';
 
 // Simple rate limiting for waitlist submissions
 const WAITLIST_RATE_LIMIT_PER_IP_PER_HOUR = 5;
@@ -18,8 +17,9 @@ async function checkWaitlistRateLimit(db: D1Database, ip: string): Promise<boole
   return (result?.count || 0) < WAITLIST_RATE_LIMIT_PER_IP_PER_HOUR;
 }
 
-export async function POST(request: Request, { env }: { env: Env }) {
+export async function POST(request: Request) {
   try {
+    const env: Env = getCloudflareContext().env;
     // Parse and validate request
     const body = await request.json();
     const validated = validateWaitlistRequest(body);
