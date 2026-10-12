@@ -29,6 +29,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.3.0(react@19.3.0)
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@axe-core/playwright':
         specifier: ^4.13.0
@@ -5077,9 +5080,6 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.6.6:
-    resolution: {integrity: sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==}
-
 snapshots:
 
   '@alloc/quick-lru@5.3.0': {}
@@ -8315,8 +8315,8 @@ snapshots:
       '@babel/parser': 7.29.9
       eslint: 9.39.5(jiti@1.21.7)
       hermes-parser: 0.25.1
-      zod: 4.6.6
-      zod-validation-error: 4.0.2(zod@4.6.6)
+      zod: 3.25.76
+      zod-validation-error: 4.0.2(zod@3.25.76)
     transitivePeerDependencies:
       - supports-color
 
@@ -10837,10 +10837,8 @@ snapshots:
       cookie: 1.1.1
       youch-core: 0.3.3
 
-  zod-validation-error@4.0.2(zod@4.6.6):
+  zod-validation-error@4.0.2(zod@3.25.76):
     dependencies:
-      zod: 4.6.6
+      zod: 3.25.76
 
   zod@3.25.76: {}
-
-  zod@4.6.6: {}
