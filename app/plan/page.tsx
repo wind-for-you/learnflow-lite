@@ -36,7 +36,8 @@ const ISSUE_TEXT: Record<PageIssue['kind'], { title: string; body: string }> = {
   no_goal: { title: '还没有学习目标', body: '先回答几个问题，我们再为你生成计划。' },
   outdated: { title: '计划格式已更新，请重新生成', body: '本地保存的旧计划无法在新版本中显示。' },
   not_found: { title: '计划服务暂不可用', body: `服务暂时无法访问 (404)，已${TEMPLATE_FALLBACK_LABEL}。` },
-  rate_limited: { title: '请求太频繁了', body: `生成次数已达上限，稍后再试；已${TEMPLATE_FALLBACK_LABEL}。` },
+  // TODO(#5): 合入后改用 lib/shared/plan.ts 的 RateLimitError { limit, remaining, resetAt } 展示精确剩余次数与恢复时间
+  rate_limited: { title: '今天的次数用完了，北京时间 0 点恢复', body: `已${TEMPLATE_FALLBACK_LABEL}，可以先按模板计划学起来。` },
   offline: { title: '网络已断开', body: `已生成的内容会保留，未完成的部分${TEMPLATE_FALLBACK_LABEL}；联网后可重试。` },
   server: { title: 'AI 生成失败', body: `服务器出了点问题，已${TEMPLATE_FALLBACK_LABEL}。` },
   stream: { title: '生成中断', body: `数据流中断，剩余周已${TEMPLATE_FALLBACK_LABEL}。` },
@@ -172,8 +173,7 @@ function PlanPageContent() {
             <p className="font-semibold">{ISSUE_TEXT[issue.kind].title}</p>
             <p className="mt-1 text-sm">
               {ISSUE_TEXT[issue.kind].body}
-              {issue.kind === 'rate_limited' && issue.resetAt ? `（重置时间：${issue.resetAt}）` : ''}
-            </p>
+                          </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {issue.kind === 'no_goal' && <LinkButton href="/onboarding">开始规划</LinkButton>}
               {issue.kind === 'outdated' && (
@@ -181,7 +181,7 @@ function PlanPageContent() {
                   重新生成
                 </Button>
               )}
-              {issue.kind !== 'no_goal' && issue.kind !== 'outdated' && !loading && (
+              {issue.kind !== 'no_goal' && issue.kind !== 'outdated' && issue.kind !== 'rate_limited' && !loading && (
                 <Button size="sm" variant="outline" onClick={restart}>
                   重试
                 </Button>

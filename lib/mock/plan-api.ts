@@ -76,7 +76,8 @@ async function* realStream(request: PlanStreamRequest): AsyncGenerator<PlanMessa
   }
   if (response.status === 429) {
     const resetAt = await readRateLimit(response);
-    throw new PlanRequestError('rate_limited', '请求过于频繁', resetAt);
+    // TODO(#5): 改为解析 lib/shared/plan.ts 中的 RateLimitError { limit, remaining, resetAt }
+    throw new PlanRequestError('rate_limited', '今天的次数用完了，北京时间 0 点恢复', resetAt);
   }
   if (!response.ok || !response.body) {
     throw new PlanRequestError('server', `服务器错误 (${response.status})`);
@@ -119,7 +120,7 @@ async function* mockStream(
     throw new PlanRequestError('not_found', '计划服务暂不可用 (404)');
   }
   if (scenario === 'rate_limited') {
-    throw new PlanRequestError('rate_limited', '请求过于频繁');
+    throw new PlanRequestError('rate_limited', '今天的次数用完了，北京时间 0 点恢复');
   }
   yield* generateMockPlanStream(request, scenario, options.mockStepMs);
 }

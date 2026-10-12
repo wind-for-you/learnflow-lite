@@ -12,7 +12,7 @@ async function planUrlWithScenario(page: import('@playwright/test').Page, scenar
 test.describe('异常场景处理', () => {
   for (const [scenario, kind, title] of [
     ['not_found', 'not_found', '计划服务暂不可用'],
-    ['rate_limited', 'rate_limited', '请求太频繁了'],
+    ['rate_limited', 'rate_limited', '今天的次数用完了，北京时间 0 点恢复'],
     ['offline', 'offline', '网络已断开'],
   ] as const) {
     test(`${scenario}：有明确状态、loading 结束、模板周补齐`, async ({ page }) => {
@@ -23,7 +23,12 @@ test.describe('异常场景处理', () => {
       await expect(alert).toContainText('先用模板计划开始');
       await waitForPlanDone(page);
       await expect(page.getByTestId('week-card')).toHaveCount(12);
-      await expect(page.getByRole('button', { name: '重试' })).toBeVisible();
+      if (kind === 'rate_limited') {
+        // 不是死路：模板周可直接打卡
+        await expect(page.getByTestId('week-card').first().getByRole('link', { name: '打卡' })).toBeVisible();
+      } else {
+        await expect(page.getByRole('button', { name: '重试' })).toBeVisible();
+      }
     });
   }
 
