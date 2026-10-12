@@ -1,98 +1,73 @@
 import { test, expect } from '@playwright/test';
+import { completeOnboarding, waitForPlanDone } from './helpers';
+
+async function planUrlWithScenario(page: import('@playwright/test').Page, scenario: string) {
+  await completeOnboarding(page);
+  const url = new URL(page.url());
+  url.searchParams.set('mock', scenario);
+  await page.evaluate(() => localStorage.removeItem('learnflow_plan'));
+  await page.goto(url.pathname + url.search);
+}
 
 test.describe('异常场景处理', () => {
-  test('断网场景：不白屏，有提示，已生成内容不丢', async ({ page, context }) => {
-    // 生成计划
-    await page.goto('/onboarding');
-    
-    await page.fill('textarea', '断网测试');
-    await page.click('button:has-text("下一题")');
-    await page.selectOption('select', '后端工程师');
-    await page.click('button:has-text("下一题")');
-    await page.fill('input[type="number"]', '10');
-    await page.click('button:has-text("下一题")');
-    await page.fill('textarea', '1 年');
-    await page.click('button:has-text("下一题")');
-    await page.fill('textarea', '测试');
-    await page.click('button:has-text("生成计划")');
-    
-    await expect(page).toHaveURL(/\/plan/);
-    
-    // 等待至少一周生成
-    await page.waitForSelector('text=第 1 周', { timeout: 15000 });
-    const initialWeeks = await page.locator('text=/第 \\d+ 周/').count();
-    expect(initialWeeks).toBeGreaterThan(0);
-    
-    // 模拟断网
+  for (const [scenario, kind, title] of [
+    ['not_found', 'not_found', '计划服务暂不可用'],
+    ['rate_limited', 'rate_limited', '请求太频繁了'],
+    ['offline', 'offline', '网络已断开'],
+  ] as const) {
+    test(`${scenario}：有明确状态、loading 结束、模板周补齐`, async ({ page }) => {
+      await planUrlWithScenario(page, scenario);
+      const alert = page.getByTestId(`plan-issue-${kind}`);
+      await expect(alert).toBeVisible({ timeout: 10000 });
+      await expect(alert).toContainText(title);
+      await expect(alert).toContainText('先用模板计划开始');
+      await waitForPlanDone(page);
+      await expect(page.getByTestId('week-card')).toHaveCount(12);
+      await expect(page.getByRole('button', { name: '重试' })).toBeVisible();
+    });
+  }
+
+  test('浏览器断网：不白屏，显示断网状态并用模板补齐', async ({ page, context }) => {
+    await completeOnboarding(page);
+    await waitForPlanDone(page);
+    await page.evaluate(() => localStorage.removeItem('learnflow_plan'));
     await context.setOffline(true);
-    await page.waitForTimeout(2000);
-    
-    // 验证不白屏
-    const bodyVisible = await page.locator('body').isVisible();
-    expect(bodyVisible).toBe(true);
-    
-    const bgColor = await page.locator('body').evaluate((el) => 
-      window.getComputedStyle(el).backgroundColor
-    );
-    expect(bgColor).not.toBe('rgb(0, 0, 0)');
-    
-    // 验证已生成内容仍在
-    const currentWeeks = await page.locator('text=/第 \\d+ 周/').count();
-    expect(currentWeeks).toBeGreaterThanOrEqual(initialWeeks);
-    
-    // 恢复网络
+    await page.getByRole('button', { name: '重新生成模板周' }).click();
+    await expect(page.getByTestId('plan-issue-offline')).toBeVisible();
+    await expect(page.getByTestId('week-card')).toHaveCount(12);
     await context.setOffline(false);
   });
 
-  test('流断处理：前端用模板补齐', async ({ page }) => {
-    await page.goto('/onboarding');
-    
-    await page.fill('textarea', '流断测试');
-    await page.click('button:has-text("下一题")');
-    await page.selectOption('select', '全栈工程师');
-    await page.click('button:has-text("下一题")');
-    await page.fill('input[type="number"]', '20');
-    await page.click('button:has-text("下一题")');
-    await page.fill('textarea', '3 个月');
-    await page.click('button:has-text("下一题")');
-    await page.fill('textarea', '测试');
-    await page.click('button:has-text("生成计划")');
-    
-    await expect(page).toHaveURL(/\/plan/);
-    
-    // 等待生成完成
-    await page.waitForTimeout(15000);
-    
-    // 应该有周数据（可能包含模板）
-    const weekCount = await page.locator('text=/第 \\d+ 周/').count();
-    expect(weekCount).toBeGreaterThan(0);
-    
-    // 检查模板标注
-    const templateLabel = page.locator('text=模板计划');
-    if (await templateLabel.count() > 0) {
-      await expect(templateLabel.first()).toBeVisible();
-    }
+  test('流断处理：前端用模板补齐剩余周', async ({ page }) => {
+    await planUrlWithScenario(page, 'truncate');
+    await waitForPlanDone(page);
+    const cards = page.getByTestId('week-card');
+    await expect(cards).toHaveCount(12);
+    await expect(cards.nth(3)).toContainText('模板计划');
+    await expect(cards.nth(0)).not.toContainText('模板计划');
   });
 
-  test('页面无白屏，核心元素可见', async ({ page }) => {
-    const pages = ['/', '/onboarding'];
-    
-    for (const url of pages) {
-      await page.goto(url);
-      
-      // 验证 body 可见
-      await expect(page.locator('body')).toBeVisible();
-      
-      // 验证非黑色背景
-      const bgColor = await page.locator('body').evaluate((el) => 
-        window.getComputedStyle(el).backgroundColor
+  test('旧版/损坏的本地计划：提示「计划格式已更新，请重新生成」', async ({ page }) => {
+    await completeOnboarding(page);
+    await waitForPlanDone(page);
+    const goalId = new URL(page.url()).searchParams.get('goalId');
+    await page.evaluate((id) => {
+      localStorage.setItem(
+        'learnflow_plan',
+        JSON.stringify({ goalId: id, weeks: [{ title: '旧计划', milestone: 'v1', topics: ['x'], practiceHours: 5 }] })
       );
-      expect(bgColor).not.toBe('rgb(0, 0, 0)');
-      expect(bgColor).not.toBe('rgba(0, 0, 0, 0)');
-      
-      // 验证有内容
-      const textContent = await page.textContent('body');
-      expect(textContent?.length || 0).toBeGreaterThan(0);
-    }
+    }, goalId);
+    await page.reload();
+    await expect(page.getByText('计划格式已更新，请重新生成')).toBeVisible();
+    await expect(page.getByTestId('week-card')).toHaveCount(0);
+    await page.getByRole('button', { name: '重新生成' }).click();
+    await waitForPlanDone(page);
+    await expect(page.getByTestId('week-card')).toHaveCount(12);
+  });
+
+  test('没有 goalId：显示引导而不是无限加载', async ({ page }) => {
+    await page.goto('/plan');
+    await expect(page.getByTestId('plan-issue-no_goal')).toBeVisible();
+    await expect(page.getByText('AI 正在生成你的计划...')).toHaveCount(0);
   });
 });

@@ -39,7 +39,12 @@ test.describe('视觉与可访问性测试', () => {
 
   test('可访问性: axe-core 检查对比度 WCAG AA', async ({ page }) => {
     const pagesToTest = ['/', '/onboarding'];
-    const results: any[] = [];
+    const results: Array<{
+      url: string;
+      totalViolations: number;
+      contrastViolations: number;
+      violations: Awaited<ReturnType<AxeBuilder['analyze']>>['violations'];
+    }> = [];
     
     for (const url of pagesToTest) {
       await page.goto(url);
@@ -70,6 +75,7 @@ test.describe('视觉与可访问性测试', () => {
     }
     
     // 保存报告
+    fs.mkdirSync('artifacts/reports', { recursive: true });
     fs.writeFileSync(
       'artifacts/reports/axe-results.json',
       JSON.stringify(results, null, 2)
@@ -83,7 +89,13 @@ test.describe('视觉与可访问性测试', () => {
     const clickableSelectors = 'button, a[href], [role="button"], input[type="submit"]';
     const clickableElements = await page.locator(clickableSelectors).all();
     
-    const violations: any[] = [];
+    const violations: Array<{
+      index: number;
+      tagName: string;
+      text: string | undefined;
+      width: number;
+      height: number;
+    }> = [];
     
     for (let i = 0; i < clickableElements.length; i++) {
       const element = clickableElements[i];
@@ -119,7 +131,7 @@ test.describe('视觉与可访问性测试', () => {
       try {
         const url = new URL(request.url());
         requests.push(url.hostname);
-      } catch (e) {
+      } catch {
         // 忽略
       }
     });
@@ -141,6 +153,7 @@ test.describe('视觉与可访问性测试', () => {
     );
     
     // 保存报告
+    fs.mkdirSync('artifacts/reports', { recursive: true });
     fs.writeFileSync(
       'artifacts/reports/network-requests.json',
       JSON.stringify({

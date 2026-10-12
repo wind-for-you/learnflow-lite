@@ -18,7 +18,7 @@ import { chromium } from 'playwright';
         hostname: url.hostname,
         url: request.url(),
       });
-    } catch (e) {
+    } catch {
       // 忽略无效 URL
     }
   });
