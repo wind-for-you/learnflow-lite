@@ -6,15 +6,16 @@
   "scripts": {
     "dev": "next dev",
     "build:next": "next build",
-    "build:worker": "npx @opennextjs/cloudflare build",
+    "build:worker": "opennextjs-cloudflare build --skipNextBuild",
     "build": "pnpm build:next && pnpm build:worker",
     "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p e2e/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "deploy": "wrangler deploy",
-    "deploy:dry": "wrangler deploy --dry-run"
+    "deploy:dry": "wrangler deploy --dry-run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.3",
@@ -27,8 +28,11 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@cloudflare/workers-types": "^4.20250110.0",
+    "@lhci/cli": "^0.15.1",
     "@opennextjs/cloudflare": "^1.2.0",
+    "@playwright/test": "^1.64.0",
     "@testing-library/react": "^16.0.1",
     "@types/canvas-confetti": "^1.6.4",
     "@types/node": "^22.10.6",
@@ -36,6 +40,8 @@
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.20",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.4.0",
     "happy-dom": "^15.11.7",
     "postcss": "^8.5.4",
     "tailwindcss": "^3.4.19",

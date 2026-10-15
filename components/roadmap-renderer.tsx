@@ -1,11 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import mermaid from 'mermaid';
-import type { WeekPlan } from '@/lib/mock/plan-data';
+import type { PlanWeekData } from '@/lib/shared/plan';
+
+const clean = (text: string, max: number) => {
+  const safe = text.replace(/["<>]/g, '');
+  return safe.length > max ? `${safe.slice(0, max)}…` : safe;
+};
 
 interface RoadmapRendererProps {
-  weeks: Array<WeekPlan & { index: number }>;
+  weeks: Array<Pick<PlanWeekData, 'title' | 'deliverable'> & { index: number }>;
 }
 
 export function RoadmapRenderer({ weeks }: RoadmapRendererProps) {
@@ -15,18 +19,19 @@ export function RoadmapRenderer({ weeks }: RoadmapRendererProps) {
   useEffect(() => {
     if (!containerRef.current || weeks.length === 0) return;
 
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: 'default',
-      securityLevel: 'loose',
-    });
-
     const renderDiagram = async () => {
+      // mermaid 体积很大，只在浏览器端按需加载，避免打进 Worker
+      const { default: mermaid } = await import('mermaid');
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'default',
+        securityLevel: 'strict',
+      });
       try {
         const nodes = weeks
           .map((week, idx) => {
             const nodeId = `week${idx}`;
-            const label = `第${idx + 1}周<br/>${week.title}`;
+            const label = `第${idx + 1}周 ${clean(week.title, 30)}<br/>${clean(week.deliverable, 24)}`;
             return `  ${nodeId}["${label}"]`;
           })
           .join('\n');

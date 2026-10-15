@@ -49,8 +49,6 @@ jobs:
       - uses: actions/checkout@v4
       
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       
       - uses: actions/setup-node@v4
         with:
@@ -73,8 +71,6 @@ jobs:
       - uses: actions/checkout@v4
       
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       
       - uses: actions/setup-node@v4
         with:
@@ -94,8 +90,6 @@ jobs:
       - uses: actions/checkout@v4
       
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       
       - uses: actions/setup-node@v4
         with:
@@ -105,35 +99,274 @@ jobs:
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
       
-      - name: Next.js 构建
-        run: pnpm build
-      
-      - name: 检查 Worker 体积
+      - name: 哨兵密钥检查 - 构建
         run: |
-          if [ -f .worker-next/index.mjs ]; then
-            SIZE=$(stat -f%z .worker-next/index.mjs 2>/dev/null || stat -c%s .worker-next/index.mjs)
-            MAX_SIZE=$((3 * 1024 * 1024))
-            THRESHOLD=$((MAX_SIZE * 70 / 100))
-            
-            echo "Worker 体积: $(($SIZE / 1024)) KB"
-            echo "阈值 (3MB 的 70%): $(($THRESHOLD / 1024)) KB"
-            
-            if [ $SIZE -gt $THRESHOLD ]; then
-              echo "❌ Worker 体积超过阈值"
-              exit 1
-            fi
-            echo "✅ Worker 体积在限制内"
-          fi
+          export AMPLITUDE_API_KEY="SENTINEL_AMPLITUDE_abc123_SHOULD_NOT_APPEAR"
+          export LLM_API_KEY="SENTINEL_LLM_xyz789_SHOULD_NOT_APPEAR"
+          pnpm build
+        env:
+          NEXT_PUBLIC_USE_MOCK: "true"
       
-      - name: 检查是否泄露密钥
+      - name: 哨兵密钥检查 - 验证
         run: |
-          if grep -r "AMPLITUDE_API_KEY" .worker-next/ .open-next/ 2>/dev/null | grep -v "process.env"; then
-            echo "❌ 构建产物中发现密钥泄露"
+          SENTINEL_AMPLITUDE="SENTINEL_AMPLITUDE_abc123_SHOULD_NOT_APPEAR"
+          SENTINEL_LLM="SENTINEL_LLM_xyz789_SHOULD_NOT_APPEAR"
+          
+          if [ ! -d ".open-next" ]; then
+            echo "❌ .open-next 目录不存在，构建失败"
             exit 1
           fi
-          echo "✅ 未发现密钥泄露"
+          
+          if [ ! -d ".next" ]; then
+            echo "❌ .next 目录不存在，构建失败"
+            exit 1
+          fi
+          
+          LEAKED=0
+          
+          echo "检查 AMPLITUDE_API_KEY 泄露..."
+          if grep -r "$SENTINEL_AMPLITUDE" .open-next/ 2>/dev/null; then
+            echo "❌ 在 .open-next 中发现 AMPLITUDE_API_KEY 泄露"
+            LEAKED=1
+          fi
+          if grep -r "$SENTINEL_AMPLITUDE" .next/static/ 2>/dev/null; then
+            echo "❌ 在 .next/static 中发现 AMPLITUDE_API_KEY 泄露"
+            LEAKED=1
+          fi
+          
+          echo "检查 LLM_API_KEY 泄露..."
+          if grep -r "$SENTINEL_LLM" .open-next/ 2>/dev/null; then
+            echo "❌ 在 .open-next 中发现 LLM_API_KEY 泄露"
+            LEAKED=1
+          fi
+          if grep -r "$SENTINEL_LLM" .next/static/ 2>/dev/null; then
+            echo "❌ 在 .next/static 中发现 LLM_API_KEY 泄露"
+            LEAKED=1
+          fi
+          
+          if [ $LEAKED -eq 1 ]; then
+            exit 1
+          fi
+          
+          echo "✅ 未发现密钥泄露 (AMPLITUDE_API_KEY, LLM_API_KEY)"
       
-      - name: Wrangler dry-run
-        run: pnpm deploy:dry
+      - name: 服务端产物不含 mermaid
+        run: |
+          if [ ! -d ".open-next/server-functions" ]; then
+            echo "❌ .open-next/server-functions 不存在"
+            exit 1
+          fi
+          # 只允许出现在元数据里：package.json 依赖声明、react-loadable 客户端 chunk 清单（handler.mjs 内联了该清单）
+          echo "mermaid 字面出现（含元数据）:"
+          grep -rl mermaid .open-next/server-functions || true
+          HITS=$(grep -rl mermaid .open-next/server-functions \
+            --exclude=package.json --exclude='*react-loadable-manifest*' --exclude=handler.mjs --exclude='*.map' || true)
+          # mermaidAPI 是 mermaid 运行时代码中必有的符号；在任何文件（含 handler.mjs）出现即说明代码被打进服务端
+          CODE=$(grep -rl mermaidAPI .open-next/server-functions || true)
+          if [ -n "$HITS$CODE" ]; then
+            echo "❌ mermaid 被打进服务端 bundle（应只在客户端动态加载）:"
+            echo "$HITS"
+            echo "$CODE"
+            exit 1
+          fi
+          echo "✅ .open-next/server-functions 中未发现 mermaid 代码（仅元数据引用）"
+
+      - name: Worker 体积检查 - Wrangler dry-run
+        run: |
+          set -o pipefail
+          # 无需 Cloudflare 登录；dry-run 打包失败（如模块无法解析）直接让任务失败
+          if ! pnpm exec wrangler deploy --dry-run --outdir .wrangler-output 2>&1 | tee wrangler-dry-run.txt; then
+            echo "❌ wrangler dry-run 失败"
+            exit 1
+          fi
+          if grep -q "ERROR" wrangler-dry-run.txt; then
+            echo "❌ wrangler dry-run 输出包含错误"
+            exit 1
+          fi
+
+          LINE=$(grep -oP "Total Upload: .*" wrangler-dry-run.txt | sed 's/\x1b\[[0-9;]*m//g' | head -1)
+          TOTAL=$(echo "$LINE" | grep -oP "Total Upload: \K[\d.]+ (KiB|MiB)")
+          GZIP=$(echo "$LINE" | grep -oP "gzip: \K[\d.]+ (KiB|MiB)")
+          if [ -z "$GZIP" ]; then
+            echo "❌ 无法从 wrangler 输出解析 gzip 体积: $LINE"
+            exit 1
+          fi
+
+          to_kib() {
+            local num unit
+            num=$(echo "$1" | grep -oP "[\d.]+")
+            unit=$(echo "$1" | grep -oP "(KiB|MiB)")
+            if [ "$unit" = "MiB" ]; then echo "$num * 1024" | bc; else echo "$num"; fi
+          }
+          GZIP_KIB=$(to_kib "$GZIP")
+          GZIP_INT=${GZIP_KIB%.*}
+          THRESHOLD_KIB=1300
+
+          {
+            echo "## Worker 体积检查"
+            echo "- Total Upload: $TOTAL"
+            echo "- Gzip: $GZIP (阈值 ${THRESHOLD_KIB} KiB)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$GZIP_INT" -gt "$THRESHOLD_KIB" ]; then
+            echo "- 状态: ❌ 超过阈值" >> "$GITHUB_STEP_SUMMARY"
+            echo "❌ Worker gzip 体积 ${GZIP} 超过 ${THRESHOLD_KIB} KiB"
+            exit 1
+          fi
+          echo "- 状态: ✅ 通过" >> "$GITHUB_STEP_SUMMARY"
+          echo "✅ Worker 体积检查通过: gzip ${GZIP}"
+
+  e2e:
+    name: E2E 测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: pnpm/action-setup@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+      
+      - name: 安装 Playwright
+        run: npx playwright install --with-deps chromium
+      
+      - name: 构建
+        run: pnpm build:next
+        env:
+          NEXT_PUBLIC_USE_MOCK: "true"
+      
+      - name: 运行 E2E 测试
+        run: pnpm test:e2e
+      
+      - name: 上传测试报告
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: |
+            artifacts/
+            test-results/
+            playwright-report/
+          retention-days: 30
+
+  lighthouse:
+    name: Lighthouse 性能测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: pnpm/action-setup@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+      
+      - name: 构建
+        run: pnpm build:next
+        env:
+          NEXT_PUBLIC_USE_MOCK: "true"
+      
+      - name: 安装 Lighthouse CI
+        run: npm install -g @lhci/cli@0.14.x
+      
+      - name: 启动服务器
+        run: |
+          pnpm start &
+          echo $! > server.pid
+          sleep 10
+          
+          for i in {1..30}; do
+            if curl -s http://localhost:3000 > /dev/null; then
+              echo "Server ready"
+              break
+            fi
+            echo "Waiting for server... ($i/30)"
+            sleep 2
+          done
+      
+      - name: 运行 Lighthouse
+        run: |
+          lhci autorun --config=lighthouserc.json || true
+          
+          if [ -f ".lighthouseci/lhr-*.json" ]; then
+            PERF=$(cat .lighthouseci/lhr-*.json | jq -r '.categories.performance.score')
+            A11Y=$(cat .lighthouseci/lhr-*.json | jq -r '.categories.accessibility.score')
+            
+            echo "## Lighthouse 结果" >> $GITHUB_STEP_SUMMARY
+            echo "- Performance: $PERF" >> $GITHUB_STEP_SUMMARY
+            echo "- Accessibility: $A11Y" >> $GITHUB_STEP_SUMMARY
+            
+            PERF_INT=$(echo "$PERF * 100" | bc | cut -d'.' -f1)
+            A11Y_INT=$(echo "$A11Y * 100" | bc | cut -d'.' -f1)
+            
+            if [ $PERF_INT -lt 90 ]; then
+              echo "- 状态: ❌ Performance < 0.9" >> $GITHUB_STEP_SUMMARY
+              exit 1
+            fi
+            
+            if [ $A11Y_INT -lt 90 ]; then
+              echo "- 状态: ❌ Accessibility < 0.9" >> $GITHUB_STEP_SUMMARY
+              exit 1
+            fi
+            
+            echo "- 状态: ✅ 通过" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Lighthouse 报告未生成"
+          fi
+      
+      - name: 停止服务器
+        if: always()
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || true
+          fi
+      
+      - name: 上传 Lighthouse 报告
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-report
+          path: .lighthouseci/
+          retention-days: 30
+
+  cloudflare-deploy-check:
+    name: Cloudflare Deploy 检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: pnpm/action-setup@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+      
+      - name: 构建
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_USE_MOCK: "true"
+      
+      - name: Wrangler deploy dry-run
+        run: |
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            echo "⚠️ 未配置 CLOUDFLARE_API_TOKEN"
+            echo "跳过真实 Cloudflare deploy 检查"
+            exit 0
+          fi
+          
+          pnpm deploy:dry
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

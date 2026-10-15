@@ -34,7 +34,7 @@ export function FeedbackWidget() {
       } else {
         alert('提交失败，请稍后重试');
       }
-    } catch (error) {
+    } catch {
       alert('网络错误，请稍后重试');
     } finally {
       setLoading(false);
@@ -46,6 +46,7 @@ export function FeedbackWidget() {
       <Button
         variant="ghost"
         size="sm"
+        aria-haspopup="dialog"
         onClick={() => setIsOpen(true)}
       >
         💬 反馈
@@ -53,8 +54,8 @@ export function FeedbackWidget() {
 
       {isOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-scale-in">
-            <h3 className="text-xl font-bold mb-4">留下你的反馈</h3>
+          <div role="dialog" aria-modal="true" aria-labelledby="feedback-title" className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-scale-in">
+            <h3 id="feedback-title" className="text-xl font-bold mb-4">留下你的反馈</h3>
             
             {submitted ? (
               <div className="text-center py-8">
@@ -64,10 +65,11 @@ export function FeedbackWidget() {
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <label htmlFor="feedback-email" className="block text-sm font-medium mb-2">
                     邮箱（可选，方便我们联系你）
                   </label>
                   <Input
+                    id="feedback-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -76,10 +78,11 @@ export function FeedbackWidget() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <label htmlFor="feedback-content" className="block text-sm font-medium mb-2">
                     反馈内容 *
                   </label>
                   <Textarea
+                    id="feedback-content"
                     value={feedback}
                     onChange={(e) => setFeedback(e.target.value)}
                     placeholder="遇到的问题、建议、想要的功能..."
